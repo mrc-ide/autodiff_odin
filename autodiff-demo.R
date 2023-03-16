@@ -2,7 +2,7 @@ incidence <- read.csv("data/incidence.csv")
 data <- mcstate::particle_filter_data(
   incidence, time = "day", rate = 4, initial_time = 0)
 
-#library(data.tree)
+library(data.tree)
 
 #sir <- odin.dust::odin_dust("models/sir.R")
 
@@ -84,7 +84,7 @@ LL <- 0
 #     progress = TRUE)
 # samples <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 
-data_input <- 0
+data_input <- NULL
 for(i in 1:100){
   data_input <- c(data_input,rep(0,3),data$cases[i])
 }
@@ -104,7 +104,42 @@ pars <- list(beta = 0.25,
 adj_mod <- adj_sir$new(pars, 0, 1)
 adj_y <- adj_mod$simulate(seq(0,400))
 
-data_input <- 0
+data_input <- NULL
 for(i in 1:100){
   data_input <- c(data_input,rep(0,3),data$cases[i])
 }
+
+pars <- list(beta = 0.25, gamma = 0.1)
+mod <- sir$new(pars, 0, 20)
+y <- mod$simulate(c(0, data$time_end))
+i <- mod$info()$index[["time"]]
+j <- mod$info()$index[["cases_inc"]]
+matplot(y[i, 1, ], t(y[j, , ]), type = "l", col = "#00000055", lty = 1, las = 1,
+        xlab = "Day", ylab = "Cases")
+points(cases ~ day, incidence, col = "red", pch = 19)
+
+compare <- function(state, observed, pars = NULL) {
+  modelled <- state["incidence", , drop = TRUE]
+  lambda <- modelled #+ rexp(length(modelled), 1e6)
+  dpois(observed$cases, lambda, log = TRUE)
+}
+
+index <- function(info) {
+  list(run = c(incidence = info$index$cases_inc),
+       state = c(t = info$index$time,
+                 I = info$index$I,
+                 cases = info$index$cases_inc))
+}
+
+filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 100,
+                                       compare = compare, index = index)
+pars <- list(beta = 0.25, gamma = 0.1)
+ff <- filter$run(pars)
+
+pars <- list(beta = 0.25 + 1e-6, gamma = 0.1)
+ff_beta <- filter$run(pars)
+
+pars <- list(beta = 0.25, gamma = 0.1 + 1e-6)
+ff_gamma <- filter$run(pars)
+
+index(mod$info())

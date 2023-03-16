@@ -69,12 +69,12 @@ adj_N <- -(beta * I/N^2) * adj_p_inf
 adj_p_IR <- I * dt * adj_n_IR
 
 #adjoint variables: propagates feedback from
-update(adj_time) <- 0
+update(adj_time) <- main_step
 update(adj_S) <- adj_N + p_SI * dt * adj_n_SI + adj_S
 update(adj_R) <- adj_N + adj_R
 update(adj_I) <- adj_N + p_IR * dt * adj_n_IR + beta/N * adj_p_inf + adj_I
 update(adj_cases_cumul) <- adj_cases_cumul
-update(adj_cases_inc) <- if (main_step %% freq == 0) 0 else adj_cases_inc + data_input[main_step]/cases_inc - 1
+update(adj_cases_inc) <- if (main_step %% freq == 0) data_input[main_step]/cases_inc - 1 else adj_cases_inc
 
 #adjoint_parameters: accumulates feedback
 update(adj_beta) <- I / N * adj_p_inf
@@ -86,7 +86,7 @@ initial(adj_S) <- 0
 initial(adj_R) <- 0
 initial(adj_I) <- 0
 initial(adj_cases_cumul) <- 0
-initial(adj_cases_inc) <- data_input[main_step]/cases_inc - 1
+initial(adj_cases_inc) <- if((total_steps+1) %% freq == 0) data_input[total_steps+1]/main_states[6,total_steps+1] - 1 else 0
 
 main_states[,] <- user()
 dim(main_states) <- user()
