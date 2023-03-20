@@ -1,13 +1,13 @@
 #Convert between the step of the adjoint model (reverse) and the main model (forward)
-main_step <- total_steps - step
+main_step <- total_steps - step - 1
 
 #pull the states of the main model
-time <- main_states[1,main_step]
-S <- main_states[2,main_step]
-R <- main_states[3,main_step]
-I <- main_states[4,main_step]
-cases_cumul <- main_states[5,main_step]
-cases_inc <- main_states[6,main_step]
+time <- main_states[1,main_step+1]
+S <- main_states[2,main_step+1]
+R <- main_states[3,main_step+1]
+I <- main_states[4,main_step+1]
+cases_cumul <- main_states[5,main_step+1]
+cases_inc <- main_states[6,main_step+1]
 
 #Recalculate the intermediate variables between the state[main_step] and state[main_step+1]
 p_IR <- 1 - exp(-(gamma))
@@ -81,12 +81,12 @@ update(adj_beta) <- I / N * adj_p_inf
 update(adj_gamma) <- exp(-(gamma)) * adj_p_IR
 update(adj_I0) <- 0
 
-initial(adj_time) <- 0
+initial(adj_time) <- total_steps
 initial(adj_S) <- 0
 initial(adj_R) <- 0
 initial(adj_I) <- 0
 initial(adj_cases_cumul) <- 0
-initial(adj_cases_inc) <- if((total_steps+1) %% freq == 0) data_input[total_steps+1]/main_states[6,total_steps+1] - 1 else 0
+initial(adj_cases_inc) <- if((total_steps) %% freq == 0) data_input[total_steps+1]/main_states[6,total_steps+1] - 1 else 0
 
 main_states[,] <- user()
 dim(main_states) <- user()
