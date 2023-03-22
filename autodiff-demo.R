@@ -2,8 +2,6 @@ incidence <- read.csv("data/incidence.csv")
 data <- mcstate::particle_filter_data(
   incidence, time = "day", rate = 4, initial_time = 0)
 
-library(data.tree)
-
 #sir <- odin.dust::odin_dust("models/sir.R")
 
 parsed_model <- jsonlite::fromJSON(odin::odin_parse("models/sir_4_AD.R"))
