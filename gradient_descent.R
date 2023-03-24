@@ -43,7 +43,7 @@ num_grad_sir <- function(beta = 0.25, gamma = 0.1, filter, h = 1e-6){
   LL_c <- filter$run(list(beta = beta, gamma = gamma))
   LL_beta_h <- filter$run(list(beta = beta+h, gamma = gamma))
   LL_gamma_h <- filter$run(list(beta = beta, gamma = gamma+h))
-  (c(LL_beta_h,LL_gamma_h)-LL_c)h
+  (c(LL_beta_h,LL_gamma_h)-LL_c)/h
 }
 
 filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 1,
