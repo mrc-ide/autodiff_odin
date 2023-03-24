@@ -39,15 +39,30 @@ gradient_sir <- function(beta = 0.25, gamma = 0.1, sir_gen, adj_gen, data_input)
   adj_y[7:8,1,401]
 }
 
+num_grad_sir <- function(beta = 0.25, gamma = 0.1, filter, h = 1e-6){
+  LL_c <- filter$run(list(beta = beta, gamma = gamma))
+  LL_beta_h <- filter$run(list(beta = beta+h, gamma = gamma))
+  LL_gamma_h <- filter$run(list(beta = beta, gamma = gamma+h))
+  (c(LL_beta_h,LL_gamma_h)-LL_c)h
+}
+
 filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 1,
                                        compare = compare, index = index)
-
-learning_rate <- 0.00002
+LL_values <- NULL
+beta_values <- NULL
+gamma_values <-NULL
+learning_rate <- 0.00001
 beta_c <- 0.25
 gamma_c <- 0.1
-for(i in 1:20){
+for(i in 1:150){
   g <- gradient_sir(beta = beta_c, gamma = gamma_c, sir, adj_sir, data_input)
+  print(g)
   beta_c <- beta_c - g[1]*learning_rate
   gamma_c <- gamma_c - g[2]*learning_rate
-  print(filter$run(list(beta = beta_c, gamma = gamma_c)))
+  LL_values <- c(LL_values,filter$run(list(beta = beta_c, gamma = gamma_c)))
+  beta_values <- c(beta_values,beta_c)
+  gamma_values <- c(gamma_values,gamma_c)
 }
+
+plot(LL_values, type="l")
+
