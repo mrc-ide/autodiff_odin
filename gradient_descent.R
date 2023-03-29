@@ -40,9 +40,9 @@ gradient_sir <- function(beta = 0.25, gamma = 0.1, sir_gen, adj_gen, data_input)
 }
 
 num_grad_sir <- function(beta = 0.25, gamma = 0.1, filter, h = 1e-6){
-  LL_c <- filter$run(list(beta = beta, gamma = gamma))
-  LL_beta_h <- filter$run(list(beta = beta+h, gamma = gamma))
-  LL_gamma_h <- filter$run(list(beta = beta, gamma = gamma+h))
+  LL_c <- filter$run(list(beta = beta, gamma = gamma, I0 = 1))
+  LL_beta_h <- filter$run(list(beta = beta+h, gamma = gamma, I0 = 1))
+  LL_gamma_h <- filter$run(list(beta = beta, gamma = gamma+h, I0 = 1))
   (c(LL_beta_h,LL_gamma_h)-LL_c)/h
 }
 
@@ -56,13 +56,15 @@ beta_c <- 0.25
 gamma_c <- 0.1
 for(i in 1:150){
   g <- gradient_sir(beta = beta_c, gamma = gamma_c, sir, adj_sir, data_input)
-  print(g)
-  beta_c <- beta_c - g[1]*learning_rate
-  gamma_c <- gamma_c - g[2]*learning_rate
-  LL_values <- c(LL_values,filter$run(list(beta = beta_c, gamma = gamma_c)))
+  g_n <- num_grad_sir(beta = beta_c, gamma = gamma_c, filter, h = 1e-6)
+  print(paste0("AD :",g, "---FD :", g_n))
+  beta_c <- beta_c + g[1]*learning_rate
+  gamma_c <- gamma_c + g[2]*learning_rate
+  LL_values <- c(LL_values,filter$run(list(beta = beta_c, gamma = gamma_c, I0 = 1)))
   beta_values <- c(beta_values,beta_c)
   gamma_values <- c(gamma_values,gamma_c)
 }
 
-plot(LL_values, type="l")
+#plot(LL_values, type="l")
+lines(LL_values, col="red")
 
