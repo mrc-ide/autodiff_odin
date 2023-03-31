@@ -51,10 +51,10 @@ filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 1,
 LL_values <- NULL
 beta_values <- NULL
 gamma_values <-NULL
-learning_rate <- 0.00001
+learning_rate <- 0.00002
 beta_c <- 0.25
 gamma_c <- 0.1
-for(i in 1:150){
+for(i in 1:250){
   g <- gradient_sir(beta = beta_c, gamma = gamma_c, sir, adj_sir, data_input)
   g_n <- num_grad_sir(beta = beta_c, gamma = gamma_c, filter, h = 1e-6)
   print(paste0("AD :",g, "---FD :", g_n))
@@ -64,6 +64,9 @@ for(i in 1:150){
   beta_values <- c(beta_values,beta_c)
   gamma_values <- c(gamma_values,gamma_c)
 }
+
+#plot(beta_values, gamma_values, type = "l")
+lines(beta_values, gamma_values, col="red")
 
 plot(LL_values, type="l")
 #lines(LL_values, col="red")
