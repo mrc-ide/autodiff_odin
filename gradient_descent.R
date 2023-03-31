@@ -58,13 +58,13 @@ for(i in 1:150){
   g <- gradient_sir(beta = beta_c, gamma = gamma_c, sir, adj_sir, data_input)
   g_n <- num_grad_sir(beta = beta_c, gamma = gamma_c, filter, h = 1e-6)
   print(paste0("AD :",g, "---FD :", g_n))
-  beta_c <- beta_c + g[1]*learning_rate
-  gamma_c <- gamma_c + g[2]*learning_rate
+  beta_c <- beta_c + g_n[1]*learning_rate
+  gamma_c <- gamma_c + g_n[2]*learning_rate
   LL_values <- c(LL_values,filter$run(list(beta = beta_c, gamma = gamma_c, I0 = 1)))
   beta_values <- c(beta_values,beta_c)
   gamma_values <- c(gamma_values,gamma_c)
 }
 
-#plot(LL_values, type="l")
-lines(LL_values, col="red")
+plot(LL_values, type="l")
+#lines(LL_values, col="red")
 
