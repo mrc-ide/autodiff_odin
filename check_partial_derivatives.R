@@ -134,3 +134,7 @@ num_adj_S <- rep(0,400)
 for(i in 1:400){
   num_adj_S[i] <-num_PD(y, i, 2, h = 1e-6)
 }
+
+plot(num_adj_S)
+lines(adj_y[2,1,400:2], col="red")
+
