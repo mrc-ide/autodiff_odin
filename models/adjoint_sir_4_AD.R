@@ -77,8 +77,8 @@ update(adj_cases_cumul) <- adj_cases_cumul
 update(adj_cases_inc) <- if ((main_step!=0)&&((main_step) %% freq == 0)) data_input[main_step]/cases_inc - 1 else adj_cases_inc
 
 #adjoint_parameters: accumulates feedback
-update(adj_beta) <- I / N * adj_p_inf
-update(adj_gamma) <- exp(-(gamma)) * adj_p_IR
+update(adj_beta) <- adj_beta + I / N * adj_p_inf
+update(adj_gamma) <- adj_gamma + exp(-(gamma)) * adj_p_IR
 update(adj_I0) <- 0
 
 initial(adj_time) <- total_steps

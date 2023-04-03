@@ -88,7 +88,7 @@ num_PD <- function(y, step, line, h=1e-6){
   cases_cumul <- y[5,1,main_step+1] + hv[5]
   cases_inc <- y[6,1,main_step+1] + hv[6]
 
-  browser()
+  #browser()
 
   #update y_h
   y_h <- c(y_h,cases_inc)
@@ -129,3 +129,8 @@ num_PD <- function(y, step, line, h=1e-6){
 }
 
 yyy <- num_PD(y, 100, 3, h = 1e-6)
+
+num_adj_S <- rep(0,400)
+for(i in 1:400){
+  num_adj_S[i] <-num_PD(y, i, 2, h = 1e-6)
+}
