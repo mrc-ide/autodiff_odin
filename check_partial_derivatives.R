@@ -32,6 +32,7 @@ num_grad_sir <- function(beta = 0.25, gamma = 0.1, filter, h = 1e-6){
 
 beta <- 0.25
 gamma <- 0.1
+h <- 1e-6
 
 pars <- list(beta = beta, gamma = gamma, I0 = 1)
 sir_model <- sir$new(pars, 0, 1)
@@ -68,34 +69,63 @@ sum(-xx_h+kk*log(xx_h)-log(factorial(kk)))
 
 ####Check partial derivatives
 
-#pull the states of the main model
-main_step <- 399
-time <- y[1,1,main_step+1]
-S <- y[2,1,main_step+1]
-R <- y[3,1,main_step+1]
-I <- y[4,1,main_step+1]
-cases_cumul <- y[5,1,main_step+1]
-cases_inc <- y[6,1,main_step+1]
+num_PD <- function(y, step, line, h=1e-6){
+  total_steps <- dim(y)[3]-1
+  main_step <- step
 
-#Recalculate the intermediate variables between the state[main_step] and state[main_step+1]
-p_IR <- 1 - exp(-(gamma))
-freq <- 4
-dt <- 1.0 / freq
+  #perturbation vector
+  hv <- rep(0,6)
+  hv[line] <- h
 
-N <- S + I + R
-p_inf <- beta * I / N
-p_SI <- 1 - exp(-(p_inf))
-n_SI <- S * p_SI * dt
-n_IR <- I * p_IR * dt
+  #y_h
+  y_h <- y[6,1,1:main_step]
 
-total_steps <- 400
-step <- total_steps - main_step - 1
-u_time <- (step + 1) * dt
-u_S <- S - n_SI
-u_I <- I + n_SI - n_IR
-u_R <- R + n_IR
-u_cases_cumul <- cases_cumul + n_SI
-u_cases_inc <- if (main_step %% freq == 0) n_SI else cases_inc + n_SI
+  #pull the states of the main model
+  time <- y[1,1,main_step+1] + hv[1]
+  S <- y[2,1,main_step+1] + hv[2]
+  R <- y[3,1,main_step+1] + hv[3]
+  I <- y[4,1,main_step+1] + hv[4]
+  cases_cumul <- y[5,1,main_step+1] + hv[5]
+  cases_inc <- y[6,1,main_step+1] + hv[6]
 
+  browser()
 
+  #update y_h
+  y_h <- c(y_h,cases_inc)
 
+  for(i in (main_step+1):total_steps){
+    #Recalculate the intermediate variables between the state[main_step] and state[main_step+1]
+    p_IR <- 1 - exp(-(gamma))
+    freq <- 4
+    dt <- 1.0 / freq
+
+    N <- S + I + R
+    p_inf <- beta * I / N
+    p_SI <- 1 - exp(-(p_inf))
+    n_SI <- S * p_SI * dt
+    n_IR <- I * p_IR * dt
+
+    step <- total_steps - i - 1
+    time <- (step + 1) * dt
+    #print(time)
+    S <- S - n_SI
+    I <- I + n_SI - n_IR
+    R <- R + n_IR
+    cases_cumul <- cases_cumul + n_SI
+    cases_inc <- if ((i-1) %% freq == 0) n_SI else cases_inc + n_SI
+    y_h <- c(y_h,cases_inc)
+  }
+
+  #browser()
+
+  kk<-data_input[rep(c(rep(FALSE,3),TRUE),100)]
+  xx_h <- y_h[c(FALSE,rep(c(rep(FALSE,3),TRUE),100))]
+  LL_h <- sum(-xx_h+kk*log(xx_h)-log(factorial(kk)))
+
+  # if(h!=0)
+ (LL_h - f_res)/h
+  # else
+  #  y_h
+}
+
+yyy <- num_PD(y, 100, 3, h = 1e-6)
