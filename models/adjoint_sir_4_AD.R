@@ -69,7 +69,7 @@ adj_N <- -(beta * I/N^2) * adj_p_inf
 adj_p_IR <- I * dt * adj_n_IR
 
 #adjoint variables: propagates feedback from
-update(adj_time) <- (main_step!=0)&&((main_step) %% freq == 0)
+update(adj_time) <- 0
 update(adj_S) <- adj_N + p_SI * dt * adj_n_SI + adj_S
 update(adj_R) <- adj_N + adj_R
 update(adj_I) <- adj_N + p_IR * dt * adj_n_IR + beta/N * adj_p_inf + adj_I
@@ -79,9 +79,9 @@ update(adj_cases_inc) <- if ((main_step!=0)&&((main_step) %% freq == 0)) data_in
 #adjoint_parameters: accumulates feedback
 update(adj_beta) <- adj_beta + I / N * adj_p_inf
 update(adj_gamma) <- adj_gamma + exp(-(gamma)) * adj_p_IR
-update(adj_I0) <- 0
+update(adj_I0) <- if(main_step == 0) adj_N + p_IR * dt * adj_n_IR + beta/N * adj_p_inf + adj_I else 0
 
-initial(adj_time) <- total_steps
+initial(adj_time) <- 0
 initial(adj_S) <- 0
 initial(adj_R) <- 0
 initial(adj_I) <- 0
