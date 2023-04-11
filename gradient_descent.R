@@ -23,51 +23,49 @@ for(i in 1:100){
   data_input <- c(data_input,rep(0,3),data$cases[i])
 }
 
-gradient_sir <- function(beta = 0.25, gamma = 0.1, sir_gen, adj_gen, data_input){
-  pars <- list(beta = beta, gamma = gamma, I0 = 1)
+gradient_sir <- function(x, sir_gen, adj_gen, data_input){
+  beta <- x[1]
+  gamma <- x[2]
+  I0 <- x[3]
+  pars <- list(beta = beta, gamma = gamma, I0 = I0)
   sir_model <- sir_gen$new(pars, 0, 1)
   y <- sir_model$simulate(seq(0,400))
   y <- y[,1,]
   pars <- list(beta = beta,
                gamma = gamma,
-               I0 = 1,
+               I0 = I0,
                main_states = y,
                data_input = data_input,
                total_steps = 400)
   adj_model <- adj_gen$new(pars, 0, 1)
   adj_y <- adj_model$simulate(seq(0,400))
-  adj_y[7:8,1,401]
+  adj_y[7:9,1,401]
 }
 
-num_grad_sir <- function(beta = 0.25, gamma = 0.1, filter, h = 1e-6){
-  LL_c <- filter$run(list(beta = beta, gamma = gamma, I0 = 1))
-  LL_beta_h <- filter$run(list(beta = beta+h, gamma = gamma, I0 = 1))
-  LL_gamma_h <- filter$run(list(beta = beta, gamma = gamma+h, I0 = 1))
-  (c(LL_beta_h,LL_gamma_h)-LL_c)/h
+num_grad_sir <- function(x, filter, h = 1e-6){
+  beta <- x[1]
+  gamma <- x[2]
+  I0 <- x[3]
+  LL_c <- filter$run(list(beta = beta, gamma = gamma, I0 = I0))
+  LL_beta_h <- filter$run(list(beta = beta+h, gamma = gamma, I0 = I0))
+  LL_gamma_h <- filter$run(list(beta = beta, gamma = gamma+h, I0 = I0))
+  LL_I0_h <- filter$run(list(beta = beta, gamma = gamma, I0 = I0+h))
+  (c(LL_beta_h,LL_gamma_h, LL_I0_h)-LL_c)/h
 }
 
 filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 1,
                                        compare = compare, index = index)
-LL_values <- NULL
-beta_values <- NULL
-gamma_values <-NULL
-learning_rate <- 0.00001
-beta_c <- 0.25
-gamma_c <- 0.1
-for(i in 1:250){
-  g <- gradient_sir(beta = beta_c, gamma = gamma_c, sir, adj_sir, data_input)
-  #g_n <- num_grad_sir(beta = beta_c, gamma = gamma_c, filter, h = 1e-6)
-  print(paste0("AD :",g, "---FD :", g_n))
-  beta_c <- beta_c + g[1]*learning_rate
-  gamma_c <- gamma_c + g[2]*learning_rate
-  LL_values <- c(LL_values,filter$run(list(beta = beta_c, gamma = gamma_c, I0 = 1)))
-  beta_values <- c(beta_values,beta_c)
-  gamma_values <- c(gamma_values,gamma_c)
+chain_values <- NULL
+learning_rate <- 0.000008
+
+x_c <- c(0.25,0.1,10)
+for(i in 1:100){
+  g <- gradient_sir(x_c, sir, adj_sir, data_input)
+  #g_n <- num_grad_sir(x_c, filter, h = 1e-6)
+  x_c <- x_c + g*learning_rate
+  LL <- filter$run(list(beta = x_c[1], gamma = x_c[2], I0 = x_c[3]))
+  chain_values <- rbind(chain_values, c(x_c, LL))
 }
 
-#plot(beta_values, gamma_values, type = "l")
-#lines(beta_values, gamma_values, col="red")
-
-plot(LL_values, type="l")
-#lines(LL_values, col="red")
+plot(chain_values[,4], type="l")
 
