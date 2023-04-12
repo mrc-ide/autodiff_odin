@@ -1,0 +1,577 @@
+---
+title: "`Reverse Automatic Differentiation for SSM with odin`"
+author: "Marc Baguelin"
+format: revealjs
+---
+
+# Automatic Differentiation
+
+## General principles
+
+- Technique for computing the derivatives of functions
+- Use the chain rule to decompose a function into a sequence of elementary functions, and then computing the derivatives of these functions
+- Sequence of elementary functions follow the computation graph
+- There are two modes of AD: forward (FAD) and reverse (RAD)
+
+## Applications of AD
+
+- Automatic differentiation has a wide range of applications
+- Machine learning: RAD train deep neural networks (back-propagation)
+- Optimization: compute gradients for nonlinear optimization
+- Inference: Hamiltonian Monte Carlo (HMC) and variational inference (VI)
+
+## Inference with AD
+
+- HMC requires computing gradients of the **log-density function** with respect to the parameters
+- Log-density functions also used in variational Bayesian inference (VI)
+- Importance of likelihood functions linking models with data
+- AD provides an efficient and accurate way to compute these gradients, making HMC/VI more effective and practical
+
+## Computation Graph {.smaller}
+
+- The computation graph is a (visual) representation of the calculations involved in a function
+- Each node in the graph represents an operation, and the edges represent the flow of data between the nodes.
+- Example Computation Graph: $f(x, y) = (x + y) * (x - y)$
+
+![](images/simple_computation_graph.png)
+
+## Recursive calculation
+
+- Both FAD and RAD run recursively through the computation graph, and calculate partial derivative at each node
+- FAD runs forward and RAD backward (!)
+- FAD uses the parent nodes, RAD the children nodes
+- Each mode computes a different intermediate quantitty
+- At node $\nu$ for a function $R^n \rightarrow R^m$, $\theta \rightarrow f(\theta)$
+  - FAD computes $\frac{\partial \nu}{\partial \theta_i}$ with one sweep per $1 \leq i \leq n$
+  - RAD computes $\frac{\partial f_{j}}{\partial \nu}$ with one sweep per $1 \leq j \leq m$
+  
+## Forward Mode
+
+- Steps
+    - compute the derivative of each input variable wrt itself
+    - work forwards through the computation graph to compute the derivatives of the intermediate nodes and outputs
+- Forward mode AD is best suited for functions with few inputs and many outputs
+- $R^n \rightarrow R^m$ with $m \gg n$  
+
+## Forward Mode Chain Rule
+
+- For a node $i$ with $k$ input edges and $k$ corresponding partial derivatives (PD) $\frac{\partial y}{\partial x_i^{(1)}}, \frac{\partial y}{\partial x_i^{(2)}}, ..., \frac{\partial y}{\partial x_i^{(k)}}$, the chain rule is:
+
+$$\frac{\partial y}{\partial x_j} = \sum_{l=1}^{k} \frac{\partial f}{\partial x_i^{(l)}} \frac{\partial x_i^{(l)}}{\partial x_j}$$
+
+where $\frac{\partial f}{\partial x_i^{(l)}}$ is the PD of $f$ with respect to the $l$th input of node $i$, and $\frac{\partial x_i^{(l)}}{\partial x_j}$ is the PD of the $l$th input of node $i$ with respect to the input $x_j$ of the previous node.
+
+## Reverse Mode
+
+- Steps
+    - compute the derivative of the output variable wrt itself
+    - work backwards through the computation graph to compute the derivatives of the intermediate nodes and inputs
+- Best suited for functions with many inputs and few outputs (i.e. $R^n \rightarrow R^m$ with $m \gg n$)
+
+## Reverse Mode Chain Rule
+
+- For a node $i$ in the computation graph with $k$ output edges and $k$ corresponding PD $\frac{\partial y_j}{\partial x_i}$, the chain rule is:
+
+$$\frac{\partial y_j}{\partial x_i} = \sum_{l=1}^{k} \frac{\partial y_j}{\partial x_l} \frac{\partial x_l}{\partial x_i}$$
+
+where $\frac{\partial y_j}{\partial x_l}$ is the PD of the output $y_j$ with respect to the input $x_l$ of node $l$, and $\frac{\partial x_l}{\partial x_i}$ is the PD of the input $x_l$ of node $l$ with respect to the input $x_i$ of node $i$.
+
+## AD vs. Numerical Differentiation
+
+- ND uses a "differentiation perturbation" around the point of interest
+- AD computes the derivative "exactly" by performing a sequence of elementary operations at the point of interest
+- AD more accurate than numerical differentiation
+- For real-valued functions, RAD gradient calculation scales as a constant (between 2 and 6) of the main programme rather than proportional to the number of parameters
+
+# SSM, odin & RAD
+
+```{r}
+r_output <- function(path, highlight = NULL) {
+  if (is.null(highlight)) {
+    prefix <- "```r"
+  } else {
+    prefix <- sprintf('```{.r code-line-numbers="%s"}', highlight)
+  }
+  writeLines(c(prefix, readLines(path), "```"))
+}
+set.seed(1) # always the same
+knitr::knit_hooks$set(small_margins = function(before, options, envir) {
+  if (before) {
+    par(mar = c(4, 4, .1, .1))
+  }
+})
+```
+
+## A reminder
+
+![](images/SSM.jpg)
+
+**SSM** = **state equations** + **observation equations**
+
+## State space vs odin steps {.smaller}
+
+![](images/SSMvsodin.png) 
+
+- A state space transition can be made of several odin steps
+
+- E.g. here we have odin step = $f_{\theta}$ vs SSM transition = $f_{\theta} \circ f_{\theta}$
+
+## Computation graph for an odin step {.smaller}
+
+![](images/graph_one_step.png)
+
+- dash line = if statement conditional on $t$
+- green = input to Log-likelihood
+- red = takes a parameter as input
+
+N.B. all calculations are self-contained in $[t,t+1]$
+
+## odin steps are chained
+
+![](images/chained_graph.png)
+
+- Ladder shaped computation graph
+- Regular parameter inputting (red)
+- Regular state outputting (green)
+
+## Likelihood Function in SSM {.smaller}
+
+- Joint probability distribution of observed data given model parameters and initial state
+- For SSM can be expressed as the product of the conditional densities of the observations given the state sequence:
+
+$$
+L(\theta, x_{0:T}) = p(y_{1:T} \mid x_{0:T}, \theta) = \prod_{t=1}^{T} p(y_{t} \mid x_{t}, \theta)
+$$
+
+or in the log form
+$$
+\ell(\theta, x_{0:T}) = \log L(\theta, x_{0:T}) = \sum_{t=1}^{T} \log p(y_{t} \mid x_{t}, \theta)
+$$
+
+## Partial derivative at an output node
+
+
+
+## Log-likelihood, SSM, computational graph, odin & RAD
+
+- SSM: function linking $x_{t}$ and data, typically $f_{\theta}(x_{t})$
+- the "time segmentation" from the forward sweep is conserved in the reverse sweep i.e. reverse sweep can be done using odin
+- RAD: 1 output, ideal situation, one reverse sweep needed
+- odin "going out" of odin at regular time
+- RAD only need to "re-inject" the "feedback" of data at regular time intervals
+
+## Implementing RAD for odin SSM
+
+- Walk through the graph backward
+- Propagate the result of the LL from output states to the parameters nodes
+- Partial derivatives are given by the final values of the parameter nodes
+- This can be done using an odin (adjoint) programme
+
+## Writing an odin adjoint program {.smaller}
+
+![](images/SSM_autodiff.png)
+
+We want to build an odin program calculating the adjoint reverse sweep
+
+## forward and reverse steps
+
+In the adjoint model steps go backward in time
+
+![](images/model_and_adjoint_steps.png)
+
+- One odin step = what happens between two time values
+- Same for adjoint program but going backward
+
+## Partial derivatives and adjoint transitions
+
+# Worked example: SIR model
+
+## The model
+
+Let's start with this SIR deterministic model
+
+```{r}
+#| results: "asis"
+r_output("models/sir_4_AD.R")
+```
+
+## Compiling the model
+
+```{r}
+#| echo: TRUE
+sir <- odin.dust::odin_dust("models/sir_4_AD.R")
+```
+
+## Building the dependency graph
+
+First let's build the graph of dependencies in the main odin model
+
+```{r}
+#| echo: TRUE
+parsed_model <- jsonlite::fromJSON(odin::odin_parse("models/sir_4_AD.R"))
+construct_param_tree <- function(parsed_model){
+  parameter_graph <- NULL
+  for(n in seq_along(parsed_model$equations$name)){
+    if(!is.null(parsed_model$equations$depends$variables[n][[1]])){
+      for(p in eval(parsed_model$equations$depends$variables[n][[1]]))
+        parameter_graph <- rbind(parameter_graph,
+                                 c(p,parsed_model$equations$name[n]))
+    }
+  }
+  igraph::graph_from_edgelist(parameter_graph)
+}
+param_graph <- construct_param_tree(parsed_model)
+```
+
+## Dependency graph
+
+```{r}
+#| echo: TRUE
+igraph::print_all(param_graph)
+```
+
+## The adjoint model
+
+Also an odin code, let's review the steps used to build it
+
+```{r}
+#| results: "asis"
+r_output("models/adjoint_sir_4_AD.R")
+```
+
+## Step 1 : steps equivalence 
+
+Derive equivalence between model and adjoint step
+```{r, eval = FALSE}
+#| echo: TRUE
+main_step <- total_steps - step - 1
+```
+
+## Step 2 : pull the state of the main model
+```{r, eval = FALSE}
+#| echo: TRUE
+time <- main_states[1,main_step+1]
+S <- main_states[2,main_step+1]
+R <- main_states[3,main_step+1]
+I <- main_states[4,main_step+1]
+cases_cumul <- main_states[5,main_step+1]
+cases_inc <- main_states[6,main_step+1]
+```
+
+## Step 3 : recalculate the intermediate variables
+
+```{r, eval = FALSE}
+#| echo: TRUE
+p_IR <- 1 - exp(-(gamma))
+freq <- user(4)
+dt <- 1.0 / freq
+
+N <- S + I + R
+p_inf <- beta * I / N
+p_SI <- 1 - exp(-(p_inf))
+n_SI <- S * p_SI * dt
+n_IR <- I * p_IR * dt
+```
+
+We now have a mirror of the state "cell" as it would be at step "main_step" N.B. we don't need to run the update block
+
+## Step 4.1 : derive the intermediate adjoint equations
+
+- Working backward we take the last variable "n_IR" and we start deriving the adjoint "adj_n_IR"
+
+- We find the children equations of "n_IR" using the graph
+
+```{r}
+#| echo: TRUE
+names(param_graph[1,])[which(param_graph["n_IR",]==1)]
+```
+
+- Getting the relevant equations in the model code
+  - update(I) <- I + n_SI - n_IR
+  - update(R) <- R + n_IR
+
+## Step 4.2 : derive the intermediate adjoint equations
+
+- Get the associated function giving the partial derivative
+```{r}
+#| echo: TRUE
+ff <- parse(text="I + n_SI - n_IR")
+D(ff, "n_IR")
+```
+
+```{r}
+#| echo: TRUE
+ff <- parse(text="R + n_IR")
+D(ff, "n_IR")
+```
+
+So the resulting (intermediate) adjoint equation is
+```{r, eval = FALSE}
+#| echo: TRUE
+adj_n_IR <- -adj_I + adj_R
+```
+N.B. adj_I, and adj_R are the adjoint state value corresponding to the "update" in the main programme
+
+## Step 4.3 : derive the intermediate adjoint equations
+
+The same algorithm can be followed for all the other intermediate variables (in reverse order) and we get:
+
+```{r, eval = FALSE}
+#| echo: TRUE
+adj_n_IR <- -adj_I + adj_R
+adj_n_SI <- adj_cases_cumul + adj_cases_inc + adj_I - adj_S
+adj_p_SI <- S * dt * adj_n_SI
+adj_p_inf <- exp(-(p_inf)) * adj_p_SI
+adj_N <- -(beta * I/N^2) * adj_p_inf
+adj_p_IR <- I * dt * adj_n_IR
+```
+
+## Step 5.1 : derive the adjoint equations of the states
+
+We apply the same algorithm for the states
+
+```{r, eval = FALSE}
+#| echo: TRUE
+update(adj_time) <- 0
+update(adj_S) <- adj_N + p_SI * dt * adj_n_SI + adj_S
+update(adj_R) <- adj_N + adj_R
+update(adj_I) <- adj_N + p_IR * dt * adj_n_IR + beta/N * adj_p_inf + adj_I
+update(adj_cases_cumul) <- adj_cases_cumul
+```
+
+## Step 5.2 : derive the adjoint equations of the states
+
+In addition we have to account for back-propagation of the LL evaluations for the state that are part of the compare function
+
+```{r}
+#| echo: TRUE
+index <- function(info) {
+  list(run = c(incidence = info$index$cases_inc),
+       state = c(t = info$index$time,
+                 I = info$index$I,
+                 cases = info$index$cases_inc))
+}
+
+compare <- function(state, observed, pars = NULL) {
+  modelled <- state["incidence", , drop = TRUE]
+  lambda <- modelled #+ rexp(length(modelled), 1e6)
+  dpois(observed$cases, lambda, log = TRUE)
+}
+```
+
+## Step 5.3 : derive the adjoint equations of the states
+
+$\log(LL_t) = k_{t}\log(x[6,1,t])-x[6,1,t]-\log({k_{t}!})$
+
+```{r}
+#| echo: TRUE
+ff <- parse(text="k*log(x)-x-factorial(k)")
+D(ff, "x")
+```
+
+And we get the final state, which is conditional on the time step, and does not happen on the initial step
+```{r, eval = FALSE}
+#| echo: TRUE
+update(adj_cases_inc) <- if ((main_step!=0)&&((main_step) %% freq == 0))
+  data_input[main_step]/cases_inc - 1 else
+    adj_cases_inc
+```
+
+## Step 6.1 : derive the adjoint equations of the parameters
+
+Final step is to accumulate what flows to the parameter nodes
+We use the same algorithm to do this accumulating the feedback as the same node appears at each time step
+```{r, eval = FALSE}
+#| echo: TRUE
+update(adj_beta) <- adj_beta + I / N * adj_p_inf
+update(adj_gamma) <- adj_gamma + exp(-(gamma)) * adj_p_IR
+```
+
+## Step 6.2 : derive the adjoint equations of the parameters
+
+Last parameter is I0 that is only used in the initial state; I0 inputs into 4 equations, but only at the initial step (=0)
+```{r, eval = FALSE}
+#| echo: TRUE
+update(adj_I0) <- if(main_step == 0) adj_N + p_IR * dt * adj_n_IR + beta/N * adj_p_inf + adj_I else 0
+```
+
+## Running and saving the forward sweep
+
+```{r}
+#| echo: TRUE
+beta <- 0.25
+gamma <- 0.1
+I0 <- 1
+pars <- list(beta = beta, gamma = gamma, I0 = I0)
+sir_model <- sir$new(pars, 0, 1)
+y <- sir_model$simulate(seq(0,400))
+```
+
+## Compiling the adjoint program
+
+```{r}
+#| echo: TRUE
+adj_sir <- odin.dust::odin_dust("models/adjoint_sir_4_AD.R")
+```
+
+## Running the adjoint program
+
+```{r}
+incidence <- read.csv("data/incidence.csv")
+data <- mcstate::particle_filter_data(
+  incidence, time = "day", rate = 4, initial_time = 0)
+```
+
+Data input for adjoint programme
+```{r}
+#| echo: TRUE
+data_input <- NULL
+for(i in 1:100){
+  data_input <- c(data_input,rep(0,3),data$cases[i])
+}
+```
+
+Run adjoint programme and get the partial derivatives!
+```{r}
+#| echo: TRUE
+y <- y[,1,]
+pars <- list(beta = beta,
+             gamma = gamma,
+             I0 = I0,
+             main_states = y,
+             data_input = data_input,
+             total_steps = 400)
+adj_model <- adj_sir$new(pars, 0, 1)
+adj_y <- adj_model$simulate(400)
+adj_y[7:9,1,1]
+```
+
+## Packaging this into a function
+
+```{r}
+#| echo: TRUE
+gradient_sir <- function(x, sir_gen, adj_gen, data_input){
+  beta <- x[1]
+  gamma <- x[2]
+  I0 <- x[3]
+  pars <- list(beta = beta, gamma = gamma, I0 = I0)
+  sir_model <- sir_gen$new(pars, 0, 1)
+  y <- sir_model$simulate(seq(0,400))
+  pars <- list(beta = beta,
+               gamma = gamma,
+               I0 = I0,
+               main_states = y[,1,],
+               data_input = data_input,
+               total_steps = 400)
+  adj_model <- adj_gen$new(pars, 0, 1)
+  adj_y <- adj_model$simulate(400)
+  adj_y[7:9,1,1]
+}
+```
+
+## Compare with ND
+
+```{r}
+#| echo: TRUE
+filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 1,
+                                       compare = compare, index = index)
+
+num_grad_sir <- function(x, filter, h = 1e-6){
+  beta <- x[1]
+  gamma <- x[2]
+  I0 <- x[3]
+  LL_c <- filter$run(list(beta = beta, gamma = gamma, I0 = I0))
+  LL_beta_h <- filter$run(list(beta = beta+h, gamma = gamma, I0 = I0))
+  LL_gamma_h <- filter$run(list(beta = beta, gamma = gamma+h, I0 = I0))
+  LL_I0_h <- filter$run(list(beta = beta, gamma = gamma, I0 = I0+h))
+  (c(LL_beta_h,LL_gamma_h, LL_I0_h)-LL_c)/h
+}
+
+num_grad_sir(c(beta,gamma,I0), filter)
+```
+
+```{r}
+#| echo: TRUE
+gradient_sir(c(beta,gamma,I0), sir, adj_sir, data_input)
+```
+
+## Running Gradient descent
+
+```{r}
+#| echo: TRUE
+chain_values <- NULL
+learning_rate <- 0.000005
+
+x_c_0 <- c(.35,0.2,8)
+x_c <- x_c_0
+for(i in 1:250){
+  g <- gradient_sir(x_c, sir, adj_sir, data_input)
+  x_c <- x_c + g*learning_rate
+  LL <- filter$run(list(beta = x_c[1], gamma = x_c[2], I0 = x_c[3]))
+  chain_values <- rbind(chain_values, c(x_c, LL))
+}
+```
+
+## Sequence of LL {.smaller}
+```{r}
+plot(chain_values[,4], type="l")
+mtext(paste0("LL_max = ", round(max(chain_values[,4]),digits = 1)))
+```
+
+## Fit before vs after GD
+
+```{r}
+pars <- list(beta = x_c_0[1], gamma = x_c_0[2], I0 = x_c_0[3])
+mod <- sir$new(pars, 0, 1)
+y <- mod$simulate(c(0, data$time_end))
+i <- mod$info()$index[["time"]]
+j <- mod$info()$index[["cases_inc"]]
+plot(cases ~ day, incidence, col = "blue", pch = 19, ylim = c(0,30))
+lines(y[i, 1, ], y[j, 1, ], type="l", lwd=3, col="grey")
+
+pars_opt <- list(beta = x_c[1], gamma = x_c[2], I0 = x_c[3])
+mod$initialize(pars_opt, 0, 1)
+y <- mod$simulate(c(0, data$time_end))
+lines(y[i, 1, ], y[j, 1, ], col="hotpink", lwd=3)
+```
+
+## Comparing speed
+
+```{r}
+#| echo: TRUE
+repeat_n <- 50
+```
+
+Numerical differentiation
+```{r}
+#| echo: TRUE
+system.time(
+  for(i in 1:repeat_n) num_grad_sir(x_c_0, filter))
+```
+
+Reverse automatic differentiation
+```{r}
+#| echo: TRUE
+system.time(
+  for(i in 1:repeat_n) gradient_sir(x_c_0, sir, adj_sir, data_input))
+```
+
+# Going further
+
+- Looping through dimensions
+- Problem of step 0 is last step of adjoint programme
+- Problem with collapsing? (e.g. in sum)
+- DSL for compare? could be used also for compiled compare
+- Not touching on transform; "parameters" of adjoint can be much less than main programme if e.g. a parameter is "data" like a vaccine calendar)
+- Deterministic model
+
+<!--  LocalWords:  mcstate revealjs sprintf writeLines readLines SSM
+ -->
+<!--  LocalWords:  envir leq BSSMC Resample propto MCMC PMCMC SMC tbh
+ -->
+<!--  LocalWords:  frac cdot handholding csv pch las asis matplot lty
+ -->
+<!--  LocalWords:  xlab ylab rexp dpois repo infecteds dgamma vcv ESS
+ -->
+<!--  LocalWords:  diag mcmc Gelman SDE
+ -->
