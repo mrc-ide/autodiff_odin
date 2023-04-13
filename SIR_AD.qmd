@@ -1,7 +1,9 @@
 ---
 title: "`Reverse Automatic Differentiation for SSM with odin`"
 author: "Marc Baguelin"
-format: revealjs
+format:
+  revealjs:
+    slide-number: c/t
 ---
 
 # Automatic Differentiation
