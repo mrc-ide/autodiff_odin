@@ -497,6 +497,41 @@ num_grad_sir(c(beta,gamma,I0), filter)
 gradient_sir(c(beta,gamma,I0), sir, adj_sir, data_input)
 ```
 
+## Translate the model in stan
+
+Our SIR example can also be coded into stan
+```{r}
+#| echo: TRUE
+r_output("models/SIR.stan")
+```
+
+
+## Compare with stan
+Model needs to be compiled and then we need to build the stanfit object
+```{r, eval = FALSE}
+#| echo: TRUE
+ m <- rstan::stan_model("models/SIR.stan")
+stan_fit <- rstan::stan(file = "models/SIR.stan", data = list(
+  T=100,
+  Y=incidence$cases,
+  freq=4), chains = 0)
+```
+
+```{r}
+m <- rstan::stan_model("models/SIR.stan")
+stan_fit <- rstan::stan(file = "models/SIR.stan", data = list(
+  T=100,
+  Y=incidence$cases,
+  freq=4), chains = 0)
+```
+
+From there we can calculate the gradient
+```{r}
+#| echo: TRUE
+rstan::grad_log_prob(stan_fit,
+                     rstan::unconstrain_pars(stan_fit,list(beta=0.25, gamma = 0.1, I0=1)))
+```
+
 ## Running Gradient descent
 
 ```{r}
@@ -537,11 +572,11 @@ y <- mod$simulate(c(0, data$time_end))
 lines(y[i, 1, ], y[j, 1, ], col="hotpink", lwd=3)
 ```
 
-## Comparing speed
+## Comparing speed {.smaller}
 
 ```{r}
 #| echo: TRUE
-repeat_n <- 50
+repeat_n <- 1000
 ```
 
 Numerical differentiation
@@ -556,6 +591,15 @@ Reverse automatic differentiation
 #| echo: TRUE
 system.time(
   for(i in 1:repeat_n) gradient_sir(x_c_0, sir, adj_sir, data_input))
+```
+
+Stan gradient
+```{r}
+#| echo: TRUE
+system.time(
+for(i in 1:repeat_n)
+  rstan::grad_log_prob(stan_fit,
+                     rstan::unconstrain_pars(stan_fit,list(beta=0.25, gamma = 0.1, I0=1))))
 ```
 
 # Going further
