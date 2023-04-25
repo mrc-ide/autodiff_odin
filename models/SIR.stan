@@ -4,9 +4,9 @@ data {
   int freq;
 }
 parameters {
-  real<lower=0,upper=4> beta;
-  real<lower=0,upper=5> gamma;
-  real<lower=0,upper=100> I0;
+  real beta;
+  real gamma;
+  real I0;
 }
 transformed parameters {
   real S;
