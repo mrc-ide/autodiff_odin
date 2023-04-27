@@ -1,13 +1,13 @@
-p_IR <- 1 - exp(-(gamma))
+dt <- 1.0 / freq
+p_IR <- 1 - exp(-(gamma) * dt)
 S0 <- 1000
 freq <- user(4)
-dt <- 1.0 / freq
 
 N <- S + I + R
-p_inf <- beta * I / N
+p_inf <- beta * I / N * dt
 p_SI <- 1 - exp(-(p_inf))
-n_SI <- S * p_SI * dt
-n_IR <- I * p_IR * dt
+n_SI <- S * p_SI
+n_IR <- I * p_IR
 
 update(time) <- (step + 1) * dt
 update(S) <- S - n_SI
