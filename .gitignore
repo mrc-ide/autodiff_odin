@@ -33,6 +33,9 @@ vignettes/*.pdf
 # log files
 *.log
 
+# tex files
+*.tex
+
 # html giles
 *.html
 
@@ -49,3 +52,6 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+#files produced for html presentation cache
+*_files/

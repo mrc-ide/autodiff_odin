@@ -1,0 +1,19 @@
+---
+title: "`gradients for stochastic models`"
+author: "Marc Baguelin"
+format:
+  revealjs:
+    slide-number: c/t
+---
+
+## Computing of the joint log-likelihood
+
+It is possible to derive the probability of the joint distribution of y and x.
+
+## Computation graph for an odin step {.smaller}
+
+![](images/graph_one_step_stoch.png)
+
+- yellow = stochastic node
+
+
