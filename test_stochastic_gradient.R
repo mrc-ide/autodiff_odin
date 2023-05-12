@@ -2,7 +2,7 @@ incidence <- read.csv("data/incidence.csv")
 data <- mcstate::particle_filter_data(
   incidence, time = "day", rate = 4, initial_time = 0)
 
-sir_stoch <- odin.dust::odin_dust("models/sir_stochastic.R")
+sir_stoch <- odin.dust::odin_dust("models/sir_stochastic_4_AD.R")
 
 beta <- 0.25
 gamma <- 0.1
