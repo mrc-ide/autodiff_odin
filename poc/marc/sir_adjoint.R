@@ -79,7 +79,12 @@ update(adj_cases_inc) <- if ((main_step!=0)&&((main_step) %% freq == 0)) data_in
 #adjoint_parameters: accumulates feedback
 update(adj_beta) <- adj_beta + I / N * dt * adj_p_inf
 update(adj_gamma) <- adj_gamma + exp(-(gamma * dt)) * dt * adj_p_IR
-update(adj_I0) <- if(main_step == 0) adj_N + p_IR * adj_n_IR + beta/N * dt * adj_p_inf + adj_I else 0
+update(adj_I0) <- adj_I0_next
+
+adj_I0_next <- if(main_step == 0) adj_N + p_IR * adj_n_IR + beta/N * dt * adj_p_inf + adj_I else 0
+
+print("adj_N: {adj_N}, p_IR: {p_IR}, S: {S}",
+  when = main_step == 0)
 
 initial(adj_time) <- 0
 initial(adj_S) <- 0

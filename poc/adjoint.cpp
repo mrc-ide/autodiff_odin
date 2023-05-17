@@ -53,6 +53,11 @@ public:
     return 8;
   }
 
+  // The interpretation here is slightly odd and very different to the
+  // above, with adjoint and adjoint_next not quite being correct, and
+  // with this function only writing the *additional* contribution of
+  // the initial conditions into a vector adjoint_next which is
+  // already largely full.
   void adjoint_initial(size_t time, const real_type * state,
                        const real_type * adjoint,
                        real_type * adjoint_next) {
@@ -73,13 +78,6 @@ public:
     const real_type adj_p_SI = S * adj_n_SI;
     const real_type adj_p_inf = dust::math::exp(-p_inf) * adj_p_SI;
     const real_type adj_N = -(shared->beta * I / (N * N) * shared->dt) * adj_p_inf;
-    adjoint_next[0] = 0;
-    adjoint_next[1] = 0;
-    adjoint_next[2] = 0;
-    adjoint_next[3] = 0;
-    adjoint_next[4] = 0;
-    adjoint_next[5] = 0;
-    adjoint_next[6] = 0;
     adjoint_next[7] = adj_N + p_IR * adj_n_IR + shared->beta / N * shared->dt * adj_p_inf + adj_I;
   }
 
@@ -320,8 +318,13 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
       model.adjoint_compare_data(state_full, d->second[0], adjoint_curr.data(), adjoint_next.data());
       std::swap(adjoint_curr, adjoint_next);
     }
-
   }
+
+  // This is the value just before the final value (i.e., at the end
+  // of the first step) which is what we need to be able to replay the
+  // graph; see adjoint_initial above.
+  const auto adjoint_last = adjoint_next.data();
+  model.adjoint_initial(time, state_full, adjoint_last, adjoint_curr.data());
 
   cpp11::writable::doubles ret(adjoint_curr.begin() + n_state,
                                adjoint_curr.begin() + n_adjoint);

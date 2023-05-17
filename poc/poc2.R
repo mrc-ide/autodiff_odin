@@ -21,5 +21,4 @@ res <- gen$parent_env$newthing(pars, d)
 res
 
 expected <- c(4511.91973090839, -2892.37818928496, 234.49219517371)
-expected[[3]] <- 0
 testthat::expect_equal(res[[2]], expected, tolerance = 1e-12)
