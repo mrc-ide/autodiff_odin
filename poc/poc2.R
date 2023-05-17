@@ -13,9 +13,9 @@ read_data <- function(n = 100, freq = 4) {
 d <- read_data()
 
 pars <- list(beta = 0.25, gamma = 0.1, I0 = 1)
-m1 <- gen$new(pars, 0, 1, deterministic = TRUE)
-m1$set_data(d)
-m1$filter()$log_likelihood
+## m1 <- gen$new(pars, 0, 1, deterministic = TRUE)
+## m1$set_data(d)
+## m1$filter()$log_likelihood
 
 res <- gen$parent_env$newthing(pars, d)
 res

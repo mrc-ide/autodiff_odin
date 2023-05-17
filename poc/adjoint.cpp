@@ -126,7 +126,12 @@ public:
     adjoint_next[2] = adj_N + adj_R;
 
     adjoint_next[3] = adj_cases_cumul;
+    // adjoint_next[4] = adj_cases_inc;
     adjoint_next[4] = data == nullptr ? adj_cases_inc : data->incidence / cases_inc - 1;
+    if (data != nullptr) {
+      Rprintf("step: %d, adjoint_next[4] = %2.5f (data: %2.1f, model: %2.1f)\n", time, adjoint_next[4],
+              data->incidence, cases_inc);
+    }
     // change to adj of cases_inc, two contributions (there are up to
     // to entries in the graph). One is with respect to data the
     // other; we think that this is more formally correct and quite
@@ -143,13 +148,19 @@ public:
   }
 
   void adjoint_compare_data(const real_type * state, const data_type& data,
-                            real_type * adjoint_state) {
+                            const real_type * adjoint,
+                            real_type * adjoint_next) {
     const real_type incidence_modelled = state[4];
     const real_type incidence_observed = data.incidence;
     const real_type lambda = incidence_modelled;
-    // it might make more sense always to add here, not sure, so
-    // should we return the amount to be added only?
-    adjoint_state[4] += incidence_observed / lambda - 1;
+    adjoint_next[0] = adjoint[0];
+    adjoint_next[1] = adjoint[1];
+    adjoint_next[2] = adjoint[2];
+    adjoint_next[3] = adjoint[3];
+    adjoint_next[4] = incidence_observed / lambda - 1;
+    adjoint_next[5] = adjoint[5];
+    adjoint_next[6] = adjoint[6];
+    adjoint_next[7] = adjoint[7];
   }
 
   real_type compare_data(const real_type * state, const data_type& data,
@@ -253,7 +264,7 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
   const auto pars = dust::dust_pars<sir>(r_pars);
   const auto data = dust::r::check_data<size_t, sir>(r_data, 1);
   const auto time_start = 0; // TODO - this would be flexible too
-  
+
   auto model = sir(pars);
 
   // Fully zero'd state, so we can check for access if we need to.
@@ -288,7 +299,7 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
   std::copy_n(state_initial.begin(), n_state, state_curr);
 
   auto d = data.begin();
-  
+
   // Forwards; compute the log likelihood from the initial conditions:
   size_t time = time_start;
   real_type ll = 0;
@@ -305,12 +316,10 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
 
   auto state_full = state.data() + (n_state * time_len - n_state);
 
-  // Some extra special sauce here needed for now - this will go away
-  // if we can simplify the compare function so that we differentiate
-  // that separately I think, because then it's easier to replay the
-  // graph; that also makes the weird null pointer thing go away.
   std::fill(adjoint_curr.begin(), adjoint_curr.end(), 0);
-  adjoint_curr[4] = (d_last->second[0].incidence) / (state_curr[4]) - 1;
+
+  model.adjoint_compare_data(state_curr, d_last->second[0], adjoint_curr.data(), adjoint_next.data());
+  std::swap(adjoint_curr, adjoint_next);
 
   while (time > time_start) {
     if (d == d_end || (d != d_start && time < d->first)) {
@@ -318,10 +327,18 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
     }
     --time;
     state_full -= n_state;
+
     model.adjoint_update(time, state_full,
-                         d->first == time ? &(d->second[0]) : nullptr,
+                         // d->first == time ? &(d->second[0]) : nullptr,
+                         nullptr,
                          adjoint_curr.data(), adjoint_next.data());
     std::swap(adjoint_curr, adjoint_next);
+
+    if (d->first == time) {
+      model.adjoint_compare_data(state_full, d->second[0], adjoint_curr.data(), adjoint_next.data());
+      std::swap(adjoint_curr, adjoint_next);
+    }
+
   }
 
   cpp11::writable::doubles ret(adjoint_curr.begin() + n_state,
