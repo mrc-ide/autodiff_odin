@@ -56,7 +56,6 @@ n_IR <- I * p_IR
 ##> the RHS of the update(R) is "R + n_IR"
 ##> the derivation returns 1
 ##> so the adjoint equation of adj_n_IR is
-
 adj_n_IR <- -adj_I + adj_R
 
 #the same process can be applied for the other intermediate

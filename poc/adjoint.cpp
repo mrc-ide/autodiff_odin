@@ -282,25 +282,29 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
     ++d;
   }
 
-  // We *should* be ok to use state_curr here but can't
-  auto state_full = state.data() + (n_state * time_len);
+  auto state_full = state.data() + (n_state * time_len - n_state);
+
+  // Some extra special sauce here needed for now - this will go away
+  // if we can simplify the compare function so that we differentiate
+  // that separately I think, because then it's easier to replay the
+  // graph; that also makes the weird null pointer thing go away.
+  std::fill(adjoint_curr.begin(), adjoint_curr.end(), 0);
+  adjoint_curr[4] = (d_last->second[0].incidence) / (state_curr[4]) - 1;
+
   while (time > time_start) {
+    if (d == d_end || (d != d_start && time < d->first)) {
+      --d;
+    }
+    --time;
     state_full -= n_state;
     model.adjoint_update(time, state_full,
                          d->first == time ? &(d->second[0]) : nullptr,
                          adjoint_curr.data(), adjoint_next.data());
     std::swap(adjoint_curr, adjoint_next);
-    time--;
-    if (time < d->first && d != d_start) {
-      --d;
-    }
   }
 
-  // TODO: also call the initial condition adjoint here too, once we
-  // have that worked out above.
+  cpp11::writable::doubles ret(adjoint_curr.begin() + n_state,
+                               adjoint_curr.begin() + n_adjoint);
 
-  return cpp11::writable::list{
-    cpp11::as_sexp(ll),
-      cpp11::as_sexp(adjoint_curr)
-      };
+  return cpp11::writable::list{cpp11::as_sexp(ll), ret};
 }
