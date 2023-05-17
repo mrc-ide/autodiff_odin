@@ -84,7 +84,6 @@ public:
   }
 
   void adjoint_update(size_t time, const real_type * state,
-                      const data_type * data,
                       const real_type * adjoint,
                       real_type * adjoint_next) {
     // Same unpack as above.
@@ -92,7 +91,7 @@ public:
     const real_type I = state[1];
     const real_type R = state[2];
     // const real_type cases_cumul = state[3];
-    const real_type cases_inc = state[4];
+    // const real_type cases_inc = state[4];
 
     // Same intermediates as above; saving these is probably more work
     // than wanted.
@@ -124,22 +123,8 @@ public:
     adjoint_next[0] = adj_N + p_SI * adj_n_SI + adj_S;
     adjoint_next[1] = adj_N + p_IR * adj_n_IR + shared->beta / N * shared->dt * adj_p_inf + adj_I;
     adjoint_next[2] = adj_N + adj_R;
-
     adjoint_next[3] = adj_cases_cumul;
-    // adjoint_next[4] = adj_cases_inc;
-    adjoint_next[4] = data == nullptr ? adj_cases_inc : data->incidence / cases_inc - 1;
-    if (data != nullptr) {
-      Rprintf("step: %d, adjoint_next[4] = %2.5f (data: %2.1f, model: %2.1f)\n", time, adjoint_next[4],
-              data->incidence, cases_inc);
-    }
-    // change to adj of cases_inc, two contributions (there are up to
-    // to entries in the graph). One is with respect to data the
-    // other; we think that this is more formally correct and quite
-    // possibly what odin will generate.
-    //
-    // adjoint_next[4] =
-    //   (data == nullptr ? 0 : data->incidence / cases_inc - 1) +
-    //   (time %% shared->freq == 0 ? adj_cases_inc : 0);
+    adjoint_next[4] = adj_cases_inc;
 
     // adjoint_parameters: accumulates feedback
     adjoint_next[5] = adj_beta + I / N * shared->dt * adj_p_inf;
@@ -328,10 +313,7 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
     --time;
     state_full -= n_state;
 
-    model.adjoint_update(time, state_full,
-                         // d->first == time ? &(d->second[0]) : nullptr,
-                         nullptr,
-                         adjoint_curr.data(), adjoint_next.data());
+    model.adjoint_update(time, state_full, adjoint_curr.data(), adjoint_next.data());
     std::swap(adjoint_curr, adjoint_next);
 
     if (d->first == time) {
