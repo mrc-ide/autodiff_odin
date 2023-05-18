@@ -3,6 +3,7 @@ title: "`Reverse Automatic Differentiation for SSM with odin`"
 author: "Marc Baguelin"
 format:
   revealjs:
+    theme: black
     slide-number: c/t
 ---
 
@@ -307,6 +308,8 @@ D(ff, "n_IR")
 ff <- parse(text="R + n_IR")
 D(ff, "n_IR")
 ```
+
+. . .
 
 So the resulting (intermediate) adjoint equation is
 ```{r, eval = FALSE}
