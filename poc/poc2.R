@@ -18,8 +18,3 @@ res
 expected10 <- list(-44.0256051296862,
                    c(244.877646917118, -140.566517375877,  25.2152128116894))
 testthat::expect_equal(res, expected10, tolerance = 1e-12)
-
-
-
-expected <- c(4511.91973090839, -2892.37818928496, 234.49219517371)
-testthat::expect_equal(res[[2]], expected, tolerance = 1e-12)

@@ -134,7 +134,6 @@ public:
                             const real_type * state, const data_type& data,
                             const real_type * adjoint,
                             real_type * adjoint_next) {
-    Rprintf("adjoint_compare_data at %d\n", time);
     const real_type incidence_modelled = state[4];
     const real_type incidence_observed = data.incidence;
     const real_type lambda = incidence_modelled;
@@ -300,16 +299,13 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
   }
 
   std::fill(adjoint_curr.begin(), adjoint_curr.end(), 0);
-
-  model.adjoint_compare_data(time, state_curr, d_last->second[0], adjoint_curr.data(), adjoint_next.data());
-  std::swap(adjoint_curr, adjoint_next);
+  --d;
 
   while (time > time_start) {
-    if (d != d_end && d->first == time) {
+    if (time == d->first) {
       model.adjoint_compare_data(time, state_curr, d->second[0], adjoint_curr.data(), adjoint_next.data());
       std::swap(adjoint_curr, adjoint_next);
-    }
-    if (d == d_end || (d != d_start && time < d->first)) {
+    } else if (d != d_start && time < d->first) {
       --d;
     }
     state_curr -= n_state;
