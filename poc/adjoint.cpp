@@ -130,9 +130,11 @@ public:
     adjoint_next[7] = 0;
   }
 
-  void adjoint_compare_data(const real_type * state, const data_type& data,
+  void adjoint_compare_data(size_t time,
+                            const real_type * state, const data_type& data,
                             const real_type * adjoint,
                             real_type * adjoint_next) {
+    Rprintf("adjoint_compare_data at %d\n", time);
     const real_type incidence_modelled = state[4];
     const real_type incidence_observed = data.incidence;
     const real_type lambda = incidence_modelled;
@@ -297,34 +299,30 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
     ++d;
   }
 
-  auto state_full = state.data() + (n_state * time_len - n_state);
-
   std::fill(adjoint_curr.begin(), adjoint_curr.end(), 0);
 
-  model.adjoint_compare_data(state_curr, d_last->second[0], adjoint_curr.data(), adjoint_next.data());
+  model.adjoint_compare_data(time, state_curr, d_last->second[0], adjoint_curr.data(), adjoint_next.data());
   std::swap(adjoint_curr, adjoint_next);
 
   while (time > time_start) {
+    if (d != d_end && d->first == time) {
+      model.adjoint_compare_data(time, state_curr, d->second[0], adjoint_curr.data(), adjoint_next.data());
+      std::swap(adjoint_curr, adjoint_next);
+    }
     if (d == d_end || (d != d_start && time < d->first)) {
       --d;
     }
+    state_curr -= n_state;
     --time;
-    state_full -= n_state;
-
-    model.adjoint_update(time, state_full, adjoint_curr.data(), adjoint_next.data());
+    model.adjoint_update(time, state_curr, adjoint_curr.data(), adjoint_next.data());
     std::swap(adjoint_curr, adjoint_next);
-
-    if (d->first == time) {
-      model.adjoint_compare_data(state_full, d->second[0], adjoint_curr.data(), adjoint_next.data());
-      std::swap(adjoint_curr, adjoint_next);
-    }
   }
 
   // This is the value just before the final value (i.e., at the end
   // of the first step) which is what we need to be able to replay the
   // graph; see adjoint_initial above.
   const auto adjoint_last = adjoint_next.data();
-  model.adjoint_initial(time, state_full, adjoint_last, adjoint_curr.data());
+  model.adjoint_initial(time, state_curr, adjoint_last, adjoint_curr.data());
 
   cpp11::writable::doubles ret(adjoint_curr.begin() + n_state,
                                adjoint_curr.begin() + n_adjoint);
