@@ -1,0 +1,218 @@
+---
+title: "odin autodiff : examples"
+author: "Marc Baguelin"
+format:
+  revealjs:
+    theme: black
+    slide-number: c/t
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Model
+
+## Model
+
+The model is a deterministic version similar to the vignette toy model.
+
+```{r}
+#| echo: TRUE
+sir <- odin.dust::odin_dust("models/sir_4_AD.R")
+```
+
+```{r load-model-and-data}
+gen_sir <- dust::dust_example("sir")
+
+#Compare function (note that there is no random noise added to the model output)
+case_compare <- function(state, observed, pars = NULL) {
+  incidence_modelled <- state[5, , drop = TRUE]
+  incidence_observed <- observed$cases
+  dpois(x = incidence_observed, lambda = incidence_modelled, log = TRUE)
+}
+
+#load data
+incidence <- read.csv(system.file("sir_incidence.csv", package = "mcstate"))
+
+dt <- 0.25
+sir_data <- mcstate::particle_filter_data(data = incidence,
+                                          time = "day",
+                                          rate = 1 / dt,
+                                          initial_time = 0)
+```
+
+```{r build-particle-filter}
+filter <- mcstate::particle_deterministic$new(data = sir_data,
+                                       model = sir,
+                                       compare = case_compare)
+```
+
+```{r generate-parameters, cache=TRUE}
+#Value of the priors for the parameters, here chosen as lognormally distributed 
+prior_par <- list(
+  meanlog_beta = -3,
+  sdlog_beta = 1.5,
+  meanlog_gamma = -2,
+  sdlog_gamma = 1
+)
+
+beta <- mcstate::pmcmc_parameter("beta", 0.16, min = 0,
+                                  prior = function(p)
+                                   dlnorm(p, meanlog = prior_par$meanlog_beta,
+                                          sdlog = prior_par$sdlog_beta, log = TRUE)
+                                 )
+gamma <- mcstate::pmcmc_parameter("gamma", 0.38, min = 0,
+                                  prior = function(p)
+                                    dlnorm(p, meanlog = prior_par$meanlog_gamma,
+                                           sdlog = prior_par$sdlog_gamma, log = TRUE)
+)
+
+
+proposal_matrix <- matrix(c(0.0004594199, 0.001108270,
+                            0.001108270, 0.002728452), nrow = 2, ncol = 2, byrow = TRUE)
+mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma), 0.4 * proposal_matrix)
+```
+
+## Ajoint model
+
+## Compile ajoint and build gradient
+
+```{r}
+#| echo: TRUE
+adj_sir <- odin.dust::odin_dust("models/adjoint_sir_4_AD.R")
+```
+
+## Preparing data input
+
+```{r}
+incidence <- read.csv("data/incidence.csv")
+data <- mcstate::particle_filter_data(
+  incidence, time = "day", rate = 4, initial_time = 0)
+```
+
+Data input for adjoint programme
+```{r}
+#| echo: TRUE
+data_input <- NULL
+for(i in 1:100){
+  data_input <- c(data_input,rep(0,3),data$cases[i])
+}
+```
+
+# Markov chain Monte Carlo
+
+## Markov chain Monte Carlo
+
+Based on the existing example in the mcstate vignette we can run the mcmc.
+
+```{r run-mcmc-to-generate-samples, cache=TRUE}
+control <- mcstate::pmcmc_control(
+  10000,
+  save_state = FALSE,
+  save_trajectories = FALSE,
+  progress = TRUE)
+mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+```
+
+## MCMC chains
+
+```{r}
+plot(log(as.numeric(mcmc_run$pars[,"beta"])), type="l")
+```
+
+```{r}
+length(unique(mcmc_run$pars[,"beta"]))/length(mcmc_run$pars[,"beta"])
+```
+
+
+## Prior vs posterior samples
+
+```{r plot-prior-and-mcmc-samples, echo=FALSE, fig.cap = "Figure 1. In grey, samples from the prior, in red the resulting samples from the MCMC and the dash ellipse is the 95% of the prior."}
+#Mean of the two distributions
+mu <- c(prior_par$meanlog_beta,prior_par$meanlog_gamma)
+#Build VCV matrix assuming independance between the two prior distributions
+l <- matrix(c(prior_par$sdlog_beta^2,0,0,prior_par$sdlog_gamma^2), nrow=2)
+#Draw sample from prior
+draw_prior <- mvtnorm::rmvnorm(n = 1000, mean = mu, sigma = l)
+
+#Plot samples from prior
+plot(draw_prior, pch = 19, col=grey(.8),
+     xlab="log(beta)", ylab="log(gamma)",
+     main ="MCMC and prior")
+
+#Plot 95% CI of the prior distribution
+lines(ellipse::ellipse( l , centre = mu) , col='red', lwd=3, lty = 3)
+
+#Plot the mcmc samples
+points(log(as.numeric(mcmc_run$pars[,"beta"])),
+       log(as.numeric(mcmc_run$pars[,"gamma"])),
+       xlim=c(-7,1), ylim = c(-5,1), col="red", pch=19)
+```
+
+``` {r auxilary-functions, echo=FALSE}
+source("functions_aux.R")
+```
+
+# Variational inference
+
+## Double stochastic algorithm {.smaller}
+
+Simple implementation based on:
+
+Michalis Titsias, Miguel Lázaro-Gredilla Proceedings of the 31st International Conference on Machine Learning, PMLR 32(2):1971-1979, 2014.
+
+```{r variational-inference}
+ #Set the initial mvnorm approximation
+initial_Chol_t <- matrix(c(.6,-0.1,0,.3), nrow = 2)
+initial_mu_t <- c(-5,-1)
+
+#Learning rate
+rho <- 0.0001
+
+n_iteration <- 1000
+KL_stoch <- rep(0,n_iteration)
+mu_t_chain <- initial_mu_t
+
+Chol_t <- initial_Chol_t
+mu_t <- initial_mu_t
+for(t in 1:n_iteration){
+  z <- rnorm(2)
+  theta <- Chol_t %*% z + mu_t
+  grad_theta <- gradient_LP(theta, mcmc_pars, filter)
+  mu_t_minus <- mu_t
+  mu_t <- mu_t + rho*grad_theta$grad_LP
+  Chol_t <- Chol_t + rho*0.1 * (grad_theta$grad_LP %*% t(z)+diag(1/diag(Chol_t)))
+  Chol_t[upper.tri(Chol_t)] <- 0
+  diag(Chol_t)[diag(Chol_t) < 1e-4] <- 1e-4
+  KL_stoch[t] <- grad_theta$LP + sum(log(diag(Chol_t)))
+  mu_t_chain <- rbind(mu_t_chain,mu_t)
+}
+```
+
+## Results
+
+```{r plot-posterior-map-and-VI, echo=FALSE, fig.cap = "Figure 2. Result from the variational inference. Samples from the prior are coloured by their posterior value. The orange ellipse represents the 95% CI of the initial approximating distribution. The sequence of mean of the approximating distribution is seen in Cyan. The red dots are the samples from the MCMC algorithm."}
+posterior_value_samples <- calculate_posterior_map(draw_prior,
+                                                   mcmc_pars,
+                                                   filter)
+n_pal <- 20
+rbPal <- colorRampPalette(c('yellow','blue'))
+plot(draw_prior, pch = 19, col=grey(.8),
+     xlab="log(beta)", ylab="log(gamma)",
+     main ="Variational inference")
+legend("bottom",title="Ventile of LogPosterior",
+       legend=c(1:n_pal),col =rbPal(n_pal),pch=20, horiz = TRUE, bty = "n", cex = .6)
+
+#plot points with the colours
+finite_prior <- posterior_value_samples!=-Inf
+colZ <- rbPal(n_pal)[as.numeric(
+  cut(log(abs(posterior_value_samples[finite_prior])),breaks = n_pal))]
+points(draw_prior[finite_prior,],pch = 20,col = colZ)
+
+lines(ellipse::ellipse( Chol2Cov(initial_Chol_t) , centre = initial_mu_t) , col='orange', lwd=3)
+points(log(as.numeric(mcmc_run$pars[,"beta"])),log(as.numeric(mcmc_run$pars[,"gamma"])), xlim=c(-7,1), ylim = c(-5,1), col="red", pch=19)
+lines(mu_t_chain, col="cyan")
+
+lines(ellipse::ellipse( Chol2Cov(Chol_t) , centre = mu_t) , col='green', lwd=3)
+```
