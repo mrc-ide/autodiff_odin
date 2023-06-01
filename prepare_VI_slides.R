@@ -1,35 +1,39 @@
 source("functions_aux.R")
 
-incidence <- read.csv("data/incidence.csv")
-data <- mcstate::particle_filter_data(
-  incidence, time = "day", rate = 4, initial_time = 0)
+######################################################
+#
+#      Set up the data, model and filter
+#
+######################################################
 
-m <- rstan::stan_model("models/SIR.stan")
-stan_fit <- rstan::stan(file = "models/SIR.stan", data = list(
-  T=100,
-  Y=incidence$cases,
-  freq=4), chains = 0)
-
+#creates the generator for the SIR dust model
 sir <- odin.dust::odin_dust("models/sir_4_AD.R")
 
+#load the incidence data for the simple SIR example
+incidence <- read.csv("data/incidence.csv")
+
+#set the timestep
+dt <- 0.25
+
+#put the data in the format needed for the filter
+sir_data <- mcstate::particle_filter_data(data = incidence,
+                                          time = "day",
+                                          rate = 1 / dt,
+                                          initial_time = 0)
+
+#creates the compare function
 case_compare <- function(state, observed, pars = NULL) {
   incidence_modelled <- state[5, , drop = TRUE]
   incidence_observed <- observed$cases
   dpois(x = incidence_observed, lambda = incidence_modelled, log = TRUE)
 }
 
-incidence <- read.csv("data/incidence.csv")
-
-dt <- 0.25
-sir_data <- mcstate::particle_filter_data(data = incidence,
-                                          time = "day",
-                                          rate = 1 / dt,
-                                          initial_time = 0)
-
+#creates the particle filter
 filter <- mcstate::particle_deterministic$new(data = sir_data,
                                               model = sir,
                                               compare = case_compare)
 
+#list of parameters for the priors (set to 2 logNormal distribution)
 prior_par <- list(
   meanlog_beta = -3,
   sdlog_beta = 3,
@@ -37,31 +41,48 @@ prior_par <- list(
   sdlog_gamma = 5
 )
 
+#define the first parameter beta
 beta <- mcstate::pmcmc_parameter("beta", 0.16, min = 0,
                                  prior = function(p)
                                    dlnorm(p, meanlog = prior_par$meanlog_beta,
                                           sdlog = prior_par$sdlog_beta, log = TRUE)
 )
+
+#define the second parameter gamma
 gamma <- mcstate::pmcmc_parameter("gamma", 0.38, min = 0,
                                   prior = function(p)
                                     dlnorm(p, meanlog = prior_par$meanlog_gamma,
                                            sdlog = prior_par$sdlog_gamma, log = TRUE)
 )
 
-
+#proposal matrix for the MH randow walk
 proposal_matrix <- matrix(c(0.0004507713, 0.001077553,
                             0.001077553, 0.002629411), nrow = 2, ncol = 2, byrow = TRUE)
-mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma), 2 * proposal_matrix)
 
-adj_sir <- odin.dust::odin_dust("models/adjoint_sir_4_AD.R")
+#creates the mcmc_pars object
+mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma), 5 * proposal_matrix)
 
-data <- mcstate::particle_filter_data(
-  incidence, time = "day", rate = 4, initial_time = 0)
+control <- mcstate::pmcmc_control(
+  10000,
+  save_state = FALSE,
+  save_trajectories = FALSE,
+  progress = TRUE)
+mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 
-data_input <- NULL
-for(i in 1:100){
-  data_input <- c(data_input,rep(0,3),data$cases[i])
-}
+#plot the chain for beta the first parameter
+plot(log(as.numeric(mcmc_run$pars[,"beta"])), type="l")
+
+#hist of the log posterior densities for the MCMC samples
+hist(mcmc_run$probabilities[,"log_posterior"], breaks = 100)
+
+#computes acceptance rate
+length(unique(mcmc_run$pars[,"beta"]))/length(mcmc_run$pars[,"beta"])
+
+######################################################
+#
+#      Plot of prior distribution and MCMC samples
+#
+######################################################
 
 #Mean of the two distributions
 mu <- c(prior_par$meanlog_beta,prior_par$meanlog_gamma)
@@ -82,21 +103,16 @@ posterior_value_samples <- calculate_posterior_map(draw_prior,
                                                    mcmc_pars,
                                                    filter)
 
-control <- mcstate::pmcmc_control(
-  10000,
-  save_state = FALSE,
-  save_trajectories = FALSE,
-  progress = TRUE)
-#mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
-
 #Plot the mcmc samples
 points(log(as.numeric(mcmc_run$pars[,"beta"])),
        log(as.numeric(mcmc_run$pars[,"gamma"])),
        xlim=c(-7,1), ylim = c(-5,1), col="red", pch=19)
 
-plot(log(as.numeric(mcmc_run$pars[,"beta"])), type="l")
-
-length(unique(mcmc_run$pars[,"beta"]))/length(mcmc_run$pars[,"beta"])
+######################################################
+#
+#      Run Variational Inference
+#
+######################################################
 
 #Set the initial mvnorm approximation
 initial_Chol_t <- matrix(c(.6,-0.5,0,.3), nrow = 2)
@@ -105,7 +121,7 @@ initial_mu_t <- c(1,1)
 #Learning rate
 rho <- 0.0001
 
-n_iteration <- 1000
+n_iteration <- 200
 KL_stoch <- rep(0,n_iteration)
 mu_t_chain <- initial_mu_t
 
@@ -132,7 +148,7 @@ for(t in 1:n_iteration){
                 mu_t)
 }
 
-png_files <- paste0("animation/VI_frame", sprintf("%06d", 1:1000), ".png")
+png_files <- paste0("animation/VI_frame", sprintf("%06d", seq(n_iteration)), ".png")
 av::av_encode_video(png_files, 'output.mp4', framerate = 24)
 utils::browseURL('output.mp4')
 
@@ -167,9 +183,23 @@ beta <- exp(theta[1])#0.25
 gamma <- exp(theta[2])#0.1
 I0 <- 10
 
+# adj_sir <- odin.dust::odin_dust("models/adjoint_sir_4_AD.R")
+#
+# data_input <- NULL
+# for(i in 1:100){
+#   data_input <- c(data_input,rep(0,3),incidence$cases[i])
+# }
+
 gradient_sir(c(beta,gamma,I0), sir, adj_sir, data_input)
-rstan::grad_log_prob(stan_fit,
-                     rstan::unconstrain_pars(stan_fit,list(beta=beta, gamma = gamma, I0=I0)))
+
+# m <- rstan::stan_model("models/SIR.stan")
+# stan_fit <- rstan::stan(file = "models/SIR.stan", data = list(
+#   T=100,
+#   Y=incidence$cases,
+#   freq=4), chains = 0)
+# rstan::grad_log_prob(stan_fit,
+#                      rstan::unconstrain_pars(stan_fit,list(beta=beta, gamma = gamma, I0=I0)))
+
 
 num_grad_sir(c(beta,gamma,I0), filter)
 
