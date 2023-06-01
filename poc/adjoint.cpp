@@ -122,7 +122,7 @@ public:
     adjoint_next[1] = adj_N + p_IR * adj_n_IR + shared->beta / N * shared->dt * adj_p_inf + adj_I;
     adjoint_next[2] = adj_N + adj_R;
     adjoint_next[3] = adj_cases_cumul;
-    adjoint_next[4] = adj_cases_inc;
+    adjoint_next[4] = adj_cases_inc * (time % shared->freq == 0 ? 0 : 1);
 
     // adjoint_parameters: accumulates feedback
     adjoint_next[5] = adj_beta + I / N * shared->dt * adj_p_inf;
@@ -137,11 +137,12 @@ public:
     const real_type incidence_modelled = state[4];
     const real_type incidence_observed = data.incidence;
     const real_type lambda = incidence_modelled;
+
     adjoint_next[0] = adjoint[0];
     adjoint_next[1] = adjoint[1];
     adjoint_next[2] = adjoint[2];
     adjoint_next[3] = adjoint[3];
-    adjoint_next[4] = incidence_observed / lambda - 1;
+    adjoint_next[4] = adjoint[4] + incidence_observed / lambda - 1;
     adjoint_next[5] = adjoint[5];
     adjoint_next[6] = adjoint[6];
     adjoint_next[7] = adjoint[7];
