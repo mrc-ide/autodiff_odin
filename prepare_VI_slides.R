@@ -1,5 +1,15 @@
 source("functions_aux.R")
 
+incidence <- read.csv("data/incidence.csv")
+data <- mcstate::particle_filter_data(
+  incidence, time = "day", rate = 4, initial_time = 0)
+
+m <- rstan::stan_model("models/SIR.stan")
+stan_fit <- rstan::stan(file = "models/SIR.stan", data = list(
+  T=100,
+  Y=incidence$cases,
+  freq=4), chains = 0)
+
 sir <- odin.dust::odin_dust("models/sir_4_AD.R")
 
 case_compare <- function(state, observed, pars = NULL) {
@@ -22,9 +32,9 @@ filter <- mcstate::particle_deterministic$new(data = sir_data,
 
 prior_par <- list(
   meanlog_beta = -3,
-  sdlog_beta = 1.5,
+  sdlog_beta = 3,
   meanlog_gamma = -2,
-  sdlog_gamma = 1
+  sdlog_gamma = 5
 )
 
 beta <- mcstate::pmcmc_parameter("beta", 0.16, min = 0,
@@ -68,25 +78,29 @@ plot(draw_prior, pch = 19, col=grey(.8),
 #Plot 95% CI of the prior distribution
 lines(ellipse::ellipse( l , centre = mu) , col='red', lwd=3, lty = 3)
 
-#Plot the mcmc samples
-points(log(as.numeric(mcmc_run$pars[,"beta"])),
-       log(as.numeric(mcmc_run$pars[,"gamma"])),
-       xlim=c(-7,1), ylim = c(-5,1), col="red", pch=19)
+posterior_value_samples <- calculate_posterior_map(draw_prior,
+                                                   mcmc_pars,
+                                                   filter)
 
 control <- mcstate::pmcmc_control(
   10000,
   save_state = FALSE,
   save_trajectories = FALSE,
   progress = TRUE)
-mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+#mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+
+#Plot the mcmc samples
+points(log(as.numeric(mcmc_run$pars[,"beta"])),
+       log(as.numeric(mcmc_run$pars[,"gamma"])),
+       xlim=c(-7,1), ylim = c(-5,1), col="red", pch=19)
 
 plot(log(as.numeric(mcmc_run$pars[,"beta"])), type="l")
 
 length(unique(mcmc_run$pars[,"beta"]))/length(mcmc_run$pars[,"beta"])
 
 #Set the initial mvnorm approximation
-initial_Chol_t <- matrix(c(.6,-0.1,0,.3), nrow = 2)
-initial_mu_t <- c(-5,-1)
+initial_Chol_t <- matrix(c(.6,-0.5,0,.3), nrow = 2)
+initial_mu_t <- c(1,1)
 
 #Learning rate
 rho <- 0.0001
@@ -108,34 +122,57 @@ for(t in 1:n_iteration){
   diag(Chol_t)[diag(Chol_t) < 1e-4] <- 1e-4
   KL_stoch[t] <- grad_theta$LP + sum(log(diag(Chol_t)))
   mu_t_chain <- rbind(mu_t_chain,mu_t)
+
+  produce_frame(t, draw_prior, posterior_value_samples, mcmc_pars,
+                filter,
+                initial_Chol_t,
+                initial_mu_t,
+                mcmc_run,
+                Chol_t,
+                mu_t)
 }
 
-posterior_value_samples <- calculate_posterior_map(draw_prior,
-                                                   mcmc_pars,
-                                                   filter)
-n_pal <- 20
-rbPal <- colorRampPalette(c('yellow','blue'))
-plot(draw_prior, pch = 19, col=grey(.8),
-     xlab="log(beta)", ylab="log(gamma)",
-     main ="Variational inference")
-legend("bottom",title="Ventile of LogPosterior",
-       legend=c(1:n_pal),col =rbPal(n_pal),pch=20, horiz = TRUE, bty = "n", cex = .6)
+png_files <- paste0("animation/VI_frame", sprintf("%06d", 1:1000), ".png")
+av::av_encode_video(png_files, 'output.mp4', framerate = 24)
+utils::browseURL('output.mp4')
 
-#plot points with the colours
-finite_prior <- posterior_value_samples!=-Inf
-colZ <- rbPal(n_pal)[as.numeric(
-  cut(log(abs(posterior_value_samples[finite_prior])),breaks = n_pal))]
-points(draw_prior[finite_prior,],pch = 20,col = colZ)
+num_grad_sir <- function(x, filter, h = 1e-6){
+  beta <- x[1]
+  gamma <- x[2]
+  I0 <- x[3]
+  LL_c <- filter$run(list(beta = beta, gamma = gamma, I0 = I0))
+  LL_beta_h <- filter$run(list(beta = beta+h, gamma = gamma, I0 = I0))
+  LL_gamma_h <- filter$run(list(beta = beta, gamma = gamma+h, I0 = I0))
+  LL_I0_h <- filter$run(list(beta = beta, gamma = gamma, I0 = I0+h))
+  (c(LL_beta_h,LL_gamma_h, LL_I0_h)-LL_c)/h
+}
 
-lines(ellipse::ellipse( Chol2Cov(initial_Chol_t) , centre = initial_mu_t) , col='orange', lwd=3)
-points(log(as.numeric(mcmc_run$pars[,"beta"])),log(as.numeric(mcmc_run$pars[,"gamma"])), xlim=c(-7,1), ylim = c(-5,1), col="red", pch=19)
-lines(mu_t_chain, col="cyan")
+index <- function(info) {
+  list(run = c(incidence = info$index$cases_inc),
+       state = c(t = info$index$time,
+                 I = info$index$I,
+                 cases = info$index$cases_inc))
+}
 
-lines(ellipse::ellipse( Chol2Cov(Chol_t) , centre = mu_t) , col='green', lwd=3)
+compare <- function(state, observed, pars = NULL) {
+  modelled <- state["incidence", , drop = TRUE]
+  lambda <- modelled #+ rexp(length(modelled), 1e6)
+  dpois(observed$cases, lambda, log = TRUE)
+}
 
-gradient_LP(theta, mcmc_pars, filter)
+filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 1,
+                                       compare = compare, index = index)
 
-gradient_sir(exp(theta), sir, adj_sir, data_input)
+beta <- exp(theta[1])#0.25
+gamma <- exp(theta[2])#0.1
+I0 <- 10
 
+gradient_sir(c(beta,gamma,I0), sir, adj_sir, data_input)
+rstan::grad_log_prob(stan_fit,
+                     rstan::unconstrain_pars(stan_fit,list(beta=beta, gamma = gamma, I0=I0)))
 
+num_grad_sir(c(beta,gamma,I0), filter)
 
+gradient_sir_with_LL(exp(theta), sir, adj_sir, data_input)
+
+c(gradient_LP(theta, mcmc_pars, filter)$grad_LP/exp(theta))
