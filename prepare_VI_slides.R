@@ -62,12 +62,15 @@ proposal_matrix <- matrix(c(0.0004507713, 0.001077553,
 #creates the mcmc_pars object
 mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma), 5 * proposal_matrix)
 
+#control parameters for the pmcmc
 control <- mcstate::pmcmc_control(
   10000,
   save_state = FALSE,
   save_trajectories = FALSE,
   progress = TRUE)
-mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+
+#run the (p)MCMC
+#mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 
 #plot the chain for beta the first parameter
 plot(log(as.numeric(mcmc_run$pars[,"beta"])), type="l")
@@ -121,12 +124,21 @@ initial_mu_t <- c(1,1)
 #Learning rate
 rho <- 0.0001
 
-n_iteration <- 200
+n_iteration <- 20
 KL_stoch <- rep(0,n_iteration)
 mu_t_chain <- initial_mu_t
 
 Chol_t <- initial_Chol_t
 mu_t <- initial_mu_t
+produce_frame(0, draw_prior, posterior_value_samples, mcmc_pars,
+              filter,
+              initial_Chol_t,
+              initial_mu_t,
+              mcmc_run,
+              Chol_t,
+              mu_t,
+              mu_t_chain)
+
 for(t in 1:n_iteration){
   z <- rnorm(2)
   theta <- Chol_t %*% z + mu_t
@@ -145,10 +157,11 @@ for(t in 1:n_iteration){
                 initial_mu_t,
                 mcmc_run,
                 Chol_t,
-                mu_t)
+                mu_t,
+                mu_t_chain)
 }
 
-png_files <- paste0("animation/VI_frame", sprintf("%06d", seq(n_iteration)), ".png")
+png_files <- paste0("animation/VI_frame", sprintf("%06d", seq(0,n_iteration)), ".png")
 av::av_encode_video(png_files, 'output.mp4', framerate = 24)
 utils::browseURL('output.mp4')
 
@@ -163,21 +176,21 @@ num_grad_sir <- function(x, filter, h = 1e-6){
   (c(LL_beta_h,LL_gamma_h, LL_I0_h)-LL_c)/h
 }
 
-index <- function(info) {
-  list(run = c(incidence = info$index$cases_inc),
-       state = c(t = info$index$time,
-                 I = info$index$I,
-                 cases = info$index$cases_inc))
-}
-
-compare <- function(state, observed, pars = NULL) {
-  modelled <- state["incidence", , drop = TRUE]
-  lambda <- modelled #+ rexp(length(modelled), 1e6)
-  dpois(observed$cases, lambda, log = TRUE)
-}
-
-filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 1,
-                                       compare = compare, index = index)
+# index <- function(info) {
+#   list(run = c(incidence = info$index$cases_inc),
+#        state = c(t = info$index$time,
+#                  I = info$index$I,
+#                  cases = info$index$cases_inc))
+# }
+#
+# compare <- function(state, observed, pars = NULL) {
+#   modelled <- state["incidence", , drop = TRUE]
+#   lambda <- modelled #+ rexp(length(modelled), 1e6)
+#   dpois(observed$cases, lambda, log = TRUE)
+# }
+#
+# filter <- mcstate::particle_filter$new(data, model = sir, n_particles = 1,
+#                                        compare = compare, index = index)
 
 beta <- exp(theta[1])#0.25
 gamma <- exp(theta[2])#0.1

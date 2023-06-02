@@ -79,7 +79,8 @@ produce_frame <- function(n, draw_prior,
                           initial_mu_t,
                           mcmc_run,
                           Chol_t,
-                          mu_t){
+                          mu_t,
+                          mu_t_chain){
   print(paste0("Producing frame ",n))
   #browser()
   png(paste0("animation/VI_frame", sprintf("%06d", n), ".png"), width = 1280, height = 720, res = 108)
@@ -97,7 +98,7 @@ produce_frame <- function(n, draw_prior,
   points(draw_prior[finite_prior,],pch = 20,col = colZ)
   lines(ellipse::ellipse( Chol2Cov(initial_Chol_t) , centre = initial_mu_t) , col='orange', lwd=3)
   points(log(as.numeric(mcmc_run$pars[,"beta"])),log(as.numeric(mcmc_run$pars[,"gamma"])), xlim=c(-7,1), ylim = c(-5,1), col="red", pch=19)
-  #lines(mu_t_chain, col="cyan")
+  lines(mu_t_chain, col="cyan")
 
   lines(ellipse::ellipse( Chol2Cov(Chol_t) , centre = mu_t) , col='green', lwd=3)
   dev.off()
