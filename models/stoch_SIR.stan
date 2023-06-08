@@ -18,7 +18,6 @@ transformed parameters {
   int cases_cumul;
   int cases_inc;
   int N;
-  real p_IR;
   int S0;
   real dt;
   real Y_model[T];
@@ -26,7 +25,6 @@ transformed parameters {
   real p_SI[n_steps];
 
   dt = 1.0 / freq;
-  p_IR = 1 - exp(-(gamma * dt));
   S0 = 1000;
 
   // Initial
