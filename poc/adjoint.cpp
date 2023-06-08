@@ -78,7 +78,9 @@ public:
     const real_type adj_p_SI = S * adj_n_SI;
     const real_type adj_p_inf = dust::math::exp(-p_inf) * adj_p_SI;
     const real_type adj_N = -(shared->beta * I / (N * N) * shared->dt) * adj_p_inf;
-    adjoint_next[7] = adj_N + p_IR * adj_n_IR + shared->beta / N * shared->dt * adj_p_inf + adj_I;
+
+    const real_type adj_I_next = adj_N + p_IR * adj_n_IR + shared->beta / N * shared->dt * adj_p_inf + adj_I;
+    adjoint_next[7] = 1 * adj_I_next;
   }
 
   void adjoint_update(size_t time, const real_type * state,
@@ -138,14 +140,14 @@ public:
     const real_type incidence_observed = data.incidence;
     const real_type lambda = incidence_modelled;
 
-    adjoint_next[0] = adjoint[0];
-    adjoint_next[1] = adjoint[1];
-    adjoint_next[2] = adjoint[2];
-    adjoint_next[3] = adjoint[3];
-    adjoint_next[4] = adjoint[4] + incidence_observed / lambda - 1;
-    adjoint_next[5] = adjoint[5];
-    adjoint_next[6] = adjoint[6];
-    adjoint_next[7] = adjoint[7];
+    adjoint_next[0] = 0;
+    adjoint_next[1] = 0;
+    adjoint_next[2] = 0;
+    adjoint_next[3] = 0;
+    adjoint_next[4] = incidence_observed / lambda - 1;
+    adjoint_next[5] = 0;
+    adjoint_next[6] = 0;
+    adjoint_next[7] = 0;
   }
 
   real_type compare_data(const real_type * state, const data_type& data,
@@ -305,6 +307,9 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
   while (time > time_start) {
     if (time == d->first) {
       model.adjoint_compare_data(time, state_curr, d->second[0], adjoint_curr.data(), adjoint_next.data());
+      for (size_t i = 0; i < adjoint_next.size(); ++i) {
+        adjoint_next[i] += adjoint_curr[i];
+      }
       std::swap(adjoint_curr, adjoint_next);
     } else if (d != d_start && time < d->first) {
       --d;
