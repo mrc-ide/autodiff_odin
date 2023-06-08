@@ -9,20 +9,23 @@ data {
 parameters {
   real beta;
   real gamma;
-  real I0;
 }
 transformed parameters {
+
+}
+model {
   int S[n_steps];
   int I[n_steps];
   int R;
   int cases_cumul;
   int cases_inc;
-  int N;
-  int S0;
   real dt;
   real Y_model[T];
   real p_inf;
   real p_SI[n_steps];
+  int S0;
+  int I0;
+  int N;
 
   dt = 1.0 / freq;
   S0 = 1000;
@@ -51,8 +54,7 @@ transformed parameters {
     Y_model[t] = cases_inc;
     cases_inc = 0;
   }
-}
-model {
+
   for (t in 1:T){
     Y[t] ~ poisson(Y_model[t]);
   }
