@@ -1,5 +1,5 @@
-#remotes::install_github("mrc-ide/odin@mrc-4277", upgrade = FALSE, force = TRUE)
-#remotes::install_github("mrc-ide/odin.dust@mrc-4278", upgrade = FALSE, force = TRUE)
+remotes::install_github("mrc-ide/odin@mrc-4277", upgrade = FALSE, force = TRUE)
+remotes::install_github("mrc-ide/odin.dust@mrc-4278", upgrade = FALSE, force = TRUE)
 
 generator <- odin::odin("models/logistic_growth_normal_obs.R")
 
