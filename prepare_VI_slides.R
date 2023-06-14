@@ -70,7 +70,7 @@ control <- mcstate::pmcmc_control(
   progress = TRUE)
 
 #run the (p)MCMC
-#mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+mcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 
 #plot the chain for beta the first parameter
 plot(log(as.numeric(mcmc_run$pars[,"beta"])), type="l")

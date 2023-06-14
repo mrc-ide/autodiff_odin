@@ -7,7 +7,7 @@ Chol2Cov <- function(x){
 #Note that theta is in [-inf,inf]^2 while x in the "epidemiological space" is in [0,+inf]^2
 logP <-function(theta, mcmc_pars, filter){
   x <- exp(theta)
-  LL <- filter$run(save_history = TRUE, pars = list(dt = dt, beta = x[1], gamma = x[2]))
+  LL <- filter$run(save_history = TRUE, pars = list(beta = x[1], gamma = x[2]))
   LPr <- mcmc_pars$prior(x)
 
   LL+LPr

@@ -31,9 +31,12 @@ points(log(as.numeric(mcmc_run$pars[,"beta"])),
        log(as.numeric(mcmc_run$pars[,"gamma"])),
        xlim=c(-7,1), ylim = c(-5,1), col="red", pch=19)
 
-iter_grad <- function(x, y, n_step, l){
+iter_grad <- function(x, y, mcmc_pars, filter, n_step, l){
+  LP_chain <- NULL
+  #browser()
   for(i in seq(n_step)){
-    grad_theta <- gradient_LP(c(x,y), mcmc_pars, filter)
+    grad_theta <- gradient_LP(c(x,y), mcmc_pars, filter, eps = 1e-8)
+    LP_chain <- rbind(LP_chain,c(i*l,grad_theta$LP)) #c(LP_chain, mcmc_pars$prior(exp(c(x,y))))
     g_x <- grad_theta$grad_LP[1]
     g_y <- grad_theta$grad_LP[2]
     x_h <- x + l*g_y/sqrt(g_x^2+g_y^2)
@@ -42,6 +45,7 @@ iter_grad <- function(x, y, n_step, l){
     x<-x_h
     y<-y_h
   }
+  return(LP_chain)
 }
 
 #Draw one random point from the prior
@@ -51,17 +55,18 @@ sample_n <- sample(nrow(draw_prior),n_iso)
 
 points(draw_prior[sample_n,1], draw_prior[sample_n,2], col="orange", pch=19)
 
-l <- .05
-n_step <- 500
+l <- .01
+n_step <- 2500
 
 for(i in sample_n)
 {
   x <- draw_prior[i,1]
   y <- draw_prior[i,2]
-  iter_grad(x,y,n_step,l)
-  iter_grad(x,y,n_step,-l)
+  LL_chain_left <-iter_grad(x,y,mcmc_pars, filter,n_step,l)
+  LL_chain_right <- iter_grad(x,y,mcmc_pars, filter,n_step,-l)
 }
 
-
+#plot the chains
+#lines(rbind(LL_chain_left[n_step:1,],LL_chain_right), type="l", lwd=3, col="green")
 
 
