@@ -46,3 +46,7 @@ reverse_y <- reverse_mod$run(tt)
 lines(reverse_y[,"t_model"], reverse_y[,"N"], lty=3, col="green")
 
 ##As we can see this is not very stable!!!
+##plot the error
+plot(y[1:81,"t"], reverse_y[81:1,"N"]- y[1:81,"N"])
+
+#Let's try to do the same now by refreshing the state at each observation point
