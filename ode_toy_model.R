@@ -1,7 +1,7 @@
 #remotes::install_github("mrc-ide/odin@mrc-4277", upgrade = FALSE, force = TRUE)
 #remotes::install_github("mrc-ide/odin.dust@mrc-4278", upgrade = FALSE, force = TRUE)
 
-generator <- odin.dust::odin_dust("models/logistic_growth_normal_obs.R")
+generator <- odin::odin("models/logistic_growth_normal_obs.R")
 
 mod <- generator$new(r=1)
 
@@ -36,5 +36,13 @@ d <- dust::dust_data(d_df)
 
 points(t_obs, d_df$observed, pch=19, col="grey")
 
+#reversing the ode's
+generator_reverse <- odin::odin("models/reverse_AD_logistic.R")
 
+reverse_mod <- generator_reverse$new(r=1, N_end=N_obs[20], t_end=20)
 
+tt <- seq(0, 25, length.out = 101)
+reverse_y <- reverse_mod$run(tt)
+lines(reverse_y[,"t_model"], reverse_y[,"N"], lty=3, col="green")
+
+##As we can see this is not very stable!!!
