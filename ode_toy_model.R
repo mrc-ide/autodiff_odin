@@ -1,5 +1,5 @@
-#remotes::install_github("mrc-ide/odin@mrc-4277", upgrade = FALSE, force = TRUE)
-#remotes::install_github("mrc-ide/odin.dust@mrc-4278", upgrade = FALSE, force = TRUE)
+remotes::install_github("mrc-ide/odin@mrc-4277", upgrade = FALSE, force = TRUE)
+remotes::install_github("mrc-ide/odin.dust@mrc-4278", upgrade = FALSE, force = TRUE)
 
 generator <- odin::odin("models/logistic_growth_normal_obs.R")
 
@@ -50,3 +50,14 @@ lines(reverse_y[,"t_model"], reverse_y[,"N"], lty=3, col="green")
 plot(y[1:81,"t"], reverse_y[81:1,"N"]- y[1:81,"N"])
 
 #Let's try to do the same now by refreshing the state at each observation point
+for(i in seq_along(t_obs[-1])){
+  obs_number <- length(t_obs)-i+1
+  reverse_mod$set_user(r=1, N_end=N_obs[obs_number], t_end=t_obs[obs_number])
+  reverse_between_obs <- reverse_mod$run(tt[tt<=t_obs[obs_number]-t_obs[obs_number-1]])
+}
+
+#Gradient of the analytical solution
+ff <- parse(text="K/(1+exp(-r*t)*(K/N0-1))")
+D(ff, "K")
+D(ff, "N0")
+D(ff, "r")
