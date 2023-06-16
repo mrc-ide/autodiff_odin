@@ -1,0 +1,25 @@
+---
+title: "`Reverse Automatic Differentiation for ode with odin`"
+author: "Marc Baguelin"
+format:
+  revealjs:
+    slide-number: c/t
+---
+
+# Automatic Differentiation
+
+## General principles
+
+- Based on chen et al.
+![](images/ode_AD_chen.png)
+
+# Worked example: logistic function
+
+## About the logistic function
+
+- Simple ode modelling growth with saturation
+- Analytic solution
+- Non linear
+
+<!--  LocalWords:  revealjs sprintf writeLines readLines 
+ -->
