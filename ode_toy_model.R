@@ -45,7 +45,9 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
                                                 adj_K_end=0,
                                                 adj_r_end=0), time=0, n_particles = 1)
 
-tt <- seq(0, 20, length.out = 101)
+reverse_mod$info()$index
+
+tt <- seq(0, 25, length.out = 101)
 reverse_y <- reverse_mod$simulate(tt)[,1,]
 lines(reverse_y[2,], reverse_y[1,], lty=3, col="green")
 
