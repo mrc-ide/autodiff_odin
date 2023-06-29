@@ -62,25 +62,16 @@ public:
                        const real_type * adjoint,
                        real_type * adjoint_next) {
     // Same unpack as above.
-    const real_type S = state[0];
-    const real_type I = state[1];
-    const real_type R = state[2];
-    const real_type N = S + I + R;
-    const real_type p_inf = shared->beta * I / N * shared->dt;
-    const real_type p_IR = 1 - dust::math::exp(-shared->gamma * shared->dt);
-    const real_type adj_S = adjoint[0];
     const real_type adj_I = adjoint[1];
-    const real_type adj_R = adjoint[2];
-    const real_type adj_cases_cumul = adjoint[3];
-    const real_type adj_cases_inc = adjoint[4];
-    const real_type adj_n_IR = -adj_I + adj_R;
-    const real_type adj_n_SI = adj_cases_cumul + adj_cases_inc + adj_I - adj_S;
-    const real_type adj_p_SI = S * adj_n_SI;
-    const real_type adj_p_inf = dust::math::exp(-p_inf) * adj_p_SI;
-    const real_type adj_N = -(shared->beta * I / (N * N) * shared->dt) * adj_p_inf;
 
-    const real_type adj_I_next = adj_N + p_IR * adj_n_IR + shared->beta / N * shared->dt * adj_p_inf + adj_I;
-    adjoint_next[7] = 1 * adj_I_next;
+    adjoint_next[0] = adjoint[0];
+    adjoint_next[1] = adjoint[1];
+    adjoint_next[2] = adjoint[2];
+    adjoint_next[3] = adjoint[3];
+    adjoint_next[4] = adjoint[4];
+    adjoint_next[5] = adjoint[5];
+    adjoint_next[6] = adjoint[6];
+    adjoint_next[7] = adjoint[7] + adj_I;
   }
 
   void adjoint_update(size_t time, const real_type * state,
@@ -320,11 +311,9 @@ cpp11::list newthing(cpp11::list r_pars, cpp11::list r_data) {
     std::swap(adjoint_curr, adjoint_next);
   }
 
-  // This is the value just before the final value (i.e., at the end
-  // of the first step) which is what we need to be able to replay the
-  // graph; see adjoint_initial above.
-  const auto adjoint_last = adjoint_next.data();
-  model.adjoint_initial(time, state_curr, adjoint_last, adjoint_curr.data());
+  model.adjoint_initial(time, state_curr,
+                        adjoint_curr.data(), adjoint_next.data());
+  std::swap(adjoint_curr, adjoint_next);
 
   cpp11::writable::doubles ret(adjoint_curr.begin() + n_state,
                                adjoint_curr.begin() + n_adjoint);
