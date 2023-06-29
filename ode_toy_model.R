@@ -60,3 +60,12 @@ ff <- parse(text="K/(1+exp(-r*t)*(K/N0-1))")
 D(ff, "K")
 D(ff, "N0")
 D(ff, "r")
+
+ff <- parse(text="r*N*(1-N/K)")
+ff2 <- parse(text="r*N-r*N^2/K")
+D(ff, "N")
+D(ff2, "N")
+D(ff, "K")
+D(ff, "r")
+D(ff, "N0")
+
