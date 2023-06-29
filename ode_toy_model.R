@@ -38,9 +38,14 @@ points(t_obs, d_df$observed, pch=19, col="grey")
 #reversing the ode's
 generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
 
-reverse_mod <- generator_reverse$new(pars= list(r=1, N_end=N_obs[20], t_end=20), time=0, n_particles = 1)
+reverse_mod <- generator_reverse$new(pars= list(r=1,
+                                                N_end=N_obs[20],
+                                                t_end=20,
+                                                adj_N_end=(d_df$observed[20]-N_obs[20])/sd_noise^2,
+                                                adj_K_end=0,
+                                                adj_r_end=0), time=0, n_particles = 1)
 
-tt <- seq(0, 25, length.out = 101)
+tt <- seq(0, 20, length.out = 101)
 reverse_y <- reverse_mod$simulate(tt)[,1,]
 lines(reverse_y[2,], reverse_y[1,], lty=3, col="green")
 
@@ -69,3 +74,5 @@ D(ff, "K")
 D(ff, "r")
 D(ff, "N0")
 
+ff3 <- parse(text="-log(sigma)-1/2*((N_obs-N)/sigma)^2")
+D(ff3, "N")
