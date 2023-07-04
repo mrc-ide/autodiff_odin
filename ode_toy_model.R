@@ -40,22 +40,53 @@ mod$set_data(d)
 yy <- mod$run(20)
 mod$compare_data()
 
+#Run system until last observation
+last_obs <- length(t_obs)
+mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
+mod$set_data(d)
+y_end <- mod$run(last_obs)
+
 #reversing the ode's
 generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
 
+N_curr <- N_obs[last_obs]
+t_curr <- t_obs[last_obs]
+adj_N_curr <- 0
+adj_K_curr <- 0
+adj_r_curr <- 0
+y_curr <- y_end
+
 reverse_mod <- generator_reverse$new(pars= list(r=1,
-                                                N_end=N_obs[20],
-                                                t_end=20,
-                                                adj_N_end=(d_df$observed[20]-N_obs[20])/sd_noise^2,
+                                                N_end=N_curr,
+                                                t_end=t_curr,
+                                                adj_N_end=adj_N_curr,
                                                 adj_K_end=0,
                                                 adj_r_end=0), time=0, n_particles = 1)
 
+contr_data <- function(observed, model, sd){
+  (observed-model)/sd^2
+}
+
+for(i in seq_along(t_obs)[-n_obs]){
+  adj_N_curr <- adj_N_curr + contr_data(N_curr, y_curr, sd_noise)
+  reverse_mod$initialize(pars= list(r=1,
+                                    N_end=N_curr,
+                                    t_end=t_curr,
+                                    adj_N_end=adj_N_curr,
+                                    adj_K_end=adj_K_curr,
+                                    adj_r_end=adj_r_curr), time=0, n_particles = 1)
+  reverse_mod$run(t_curr-t_obs[n_obs-i])
+
+  N_curr <- reverse_mod$info()$index$N
+  t_curr <- t_obs[n_obs-i]
+  adj_N_curr <- reverse_mod$info()$index$adj_N
+  adj_K_curr <- reverse_mod$info()$index$adj_K
+  adj_r_curr <- reverse_mod$info()$index$adj_r
+}
+
+
 
 reverse_mod$info()$index
-
-tt <- seq(0, 25, length.out = 101)
-reverse_y <- reverse_mod$simulate(tt)[,1,]
-lines(reverse_y[2,], reverse_y[1,], lty=3, col="green")
 
 ##As we can see this is slightly unstable!!!
 ##plot the error
