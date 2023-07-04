@@ -1,5 +1,5 @@
 ---
-title: "`Reverse Automatic Differentiation for ode with odin`"
+title: "`Reverse Automatic Differentiation for odes with odin`"
 author: "Marc Baguelin"
 format:
   revealjs:
@@ -12,6 +12,18 @@ format:
 
 - Based on chen et al.
 ![](images/ode_AD_chen.png)
+
+# Comparison with discrete AD algorithm {.smaller}
+
+very similar algorithm
+
+* Step 1: run the system forward until the last data point
+* Step 2: compute the contribution of data point to adjoints
+* Step 3: compute the backward system (including state, adjoint state and adjoint parameters) until previous data point or initial time
+* Step 4: if not initial time go to step 2, if initial go to step 5
+* Step 5: add the contribution of initial conditions to adjoint of parameters
+* Step 6: read gradient
+
 
 # Worked example: logistic function
 

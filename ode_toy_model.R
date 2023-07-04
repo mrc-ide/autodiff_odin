@@ -7,9 +7,10 @@ generator <- odin.dust::odin_dust("models/logistic_growth_normal_obs.R")
 mod <- generator$new(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
 
 n_obs <- 20
-tt <- seq(0, 25, length.out = 101)
 t_obs <- seq(1, n_obs)
 
+#Plot the trajectory
+tt <- seq(0, 25, length.out = 101)
 y <- mod$simulate(tt)[,1,]
 plot(tt, y, xlab = "Time", ylab = "N", main = "", type="l", ylim= c(0,120))
 
@@ -21,19 +22,23 @@ r <- 1
 #computes the mid-point time (t0 such that N(t0)=K/2)
 t0 <- log(K/N0-1)/r
 
-#plot the analytical solution of the black model
+#plot the analytical solution of the plotted model
 N_obs <- K/(1+exp(-r*(t_obs-t0)))
 points(t_obs, N_obs)
 
 #generates noisy observations/data
 sd_noise <- 5
-
 d_df <- data.frame(time = t_obs,
                    observed = rnorm(N_obs,N_obs, sd_noise))
-
-d <- dust::dust_data(d_df)
-
 points(t_obs, d_df$observed, pch=19, col="grey")
+
+
+#Example of calculate the contribution to the log-likelihood of one data point
+#using the inline compare and the generated data
+mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
+mod$set_data(d)
+yy <- mod$run(20)
+mod$compare_data()
 
 #reversing the ode's
 generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
@@ -44,6 +49,7 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
                                                 adj_N_end=(d_df$observed[20]-N_obs[20])/sd_noise^2,
                                                 adj_K_end=0,
                                                 adj_r_end=0), time=0, n_particles = 1)
+
 
 reverse_mod$info()$index
 
