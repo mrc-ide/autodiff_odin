@@ -10,8 +10,8 @@ format:
 
 ## General principles
 
-- Based on chen et al.
-![](images/ode_AD_chen.png)
+- Based on Chen et al.
+![](images/ode_AD_chen.png){.absolute top=200 left=0 width="435" height="300"}
 
 ## Comparison with discrete AD algorithm {.smaller}
 
