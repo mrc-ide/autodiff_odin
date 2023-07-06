@@ -13,7 +13,7 @@ format:
 - Based on chen et al.
 ![](images/ode_AD_chen.png)
 
-# Comparison with discrete AD algorithm {.smaller}
+## Comparison with discrete AD algorithm {.smaller}
 
 very similar algorithm
 
@@ -29,9 +29,116 @@ very similar algorithm
 
 ## About the logistic function
 
-- Simple ode modelling growth with saturation
-- Analytic solution
+- Simple 1-D ode modelling growth with saturation
+- Three parameters 
+- Known analytical solution
 - Non linear
+
+## ODE Form {.smaller}
+
+The ODE form of the logistic function is:
+
+$$
+\begin{cases}
+\begin{align*}
+\frac{dN}{dt} &= rN\left(1 - \frac{N}{K}\right) \\
+N(0) &= N_{0}
+\end{align*}
+\end{cases}
+$$
+
+where:
+
+- $K$ is the carrying capacity or maximum value the function can reach
+- $r$ is the growth rate or steepness of the curve
+- $N_{0}$ is the initial condition of the ODE 
+
+## Equation Form
+
+The equation form of the logistic function is given by:
+
+$$N(t) = \frac{K}{1 + \left ( \frac{K}{N_{0}}-1 \right ) e^{-rt}}$$
+
+## odin model with normal observation model
+
+```{r}
+r_output <- function(path, highlight = NULL) {
+  if (is.null(highlight)) {
+    prefix <- "```r"
+  } else {
+    prefix <- sprintf('```{.r code-line-numbers="%s"}', highlight)
+  }
+  writeLines(c(prefix, readLines(path), "```"))
+}
+set.seed(1) # always the same
+knitr::knit_hooks$set(small_margins = function(before, options, envir) {
+  if (before) {
+    par(mar = c(4, 4, .1, .1))
+  }
+})
+```
+
+```{r}
+#| results: "asis"
+r_output("models/logistic_growth_normal_obs.R")
+```
+
+The model has 4 parameters $r$, $K$, $N_{0}$ and $\sigma$ the standard deviation of the observation process
+
+## Logistic function plot
+
+We can use odin to integrate the ODE:
+
+```{r}
+#| echo: TRUE
+generator <- odin.dust::odin_dust("models/logistic_growth_normal_obs.R")
+```
+
+## Logistic function plot
+
+```{r}
+#default parameters
+N0 <- 2
+K <- 100
+r <- 1
+
+mod <- generator$new(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
+
+n_obs <- 20
+t_obs <- seq(1, n_obs)
+
+#Plot the trajectory
+tt <- seq(0, 25, length.out = 101)
+y <- mod$simulate(tt)[,1,]
+plot(tt, y, xlab = "Time", ylab = "N", main = "", type="l", ylim= c(0,120), lty=1)
+```
+
+## Generating observations using analytical formula
+
+```{r plot-observations}
+n_obs <- 20
+t_obs <- seq(1, n_obs)
+
+#computes the mid-point time (t0 such that N(t0)=K/2)
+t0 <- log(K/N0-1)/r
+
+#plot the analytical solution of the plotted model
+N_obs <- K/(1+exp(-r*(t_obs-t0)))
+#points(t_obs, N_obs)
+
+#generates noisy observations/data
+sd_noise <- 5
+d_df <- data.frame(time = t_obs,
+                   observed = rnorm(N_obs,N_obs, sd_noise))
+plot(tt, y, xlab = "Time", ylab = "N", main = "", type="l", ylim= c(0,120), lty=3)
+points(t_obs, N_obs, pch=19, col="grey")
+points(t_obs, d_df$observed, pch=19, col="black")
+for(i in seq_along(t_obs)){
+  lines(c(t_obs[i],t_obs[i]), c(N_obs[i],d_df$observed[i]))
+}
+```
+
+
 
 <!--  LocalWords:  revealjs sprintf writeLines readLines 
  -->

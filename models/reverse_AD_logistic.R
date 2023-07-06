@@ -11,9 +11,10 @@ initial(adj_K) <- adj_K_end
 initial(adj_r) <- adj_r_end
 
 N_end <- user(1)
+K <- user(100)
+r <- user()
 t_end <- user()
 adj_N_end <- user()
 adj_K_end <- user()
 adj_r_end <- user()
-K <- user(100)
-r <- user()
+

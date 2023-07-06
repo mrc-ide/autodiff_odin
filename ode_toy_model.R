@@ -4,7 +4,12 @@
 
 generator <- odin.dust::odin_dust("models/logistic_growth_normal_obs.R")
 
-mod <- generator$new(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
+#default parameters
+N0 <- 2
+K <- 100
+r <- 1
+
+mod <- generator$new(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
 
 n_obs <- 20
 t_obs <- seq(1, n_obs)
@@ -13,11 +18,6 @@ t_obs <- seq(1, n_obs)
 tt <- seq(0, 25, length.out = 101)
 y <- mod$simulate(tt)[,1,]
 plot(tt, y, xlab = "Time", ylab = "N", main = "", type="l", ylim= c(0,120))
-
-#default parameters
-N0 <- 1
-K <- 100
-r <- 1
 
 #computes the mid-point time (t0 such that N(t0)=K/2)
 t0 <- log(K/N0-1)/r
@@ -35,6 +35,7 @@ points(t_obs, d_df$observed, pch=19, col="grey")
 
 #Example of calculate the contribution to the log-likelihood of one data point
 #using the inline compare and the generated data
+d <- dust::dust_data(d_df)
 mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
 mod$set_data(d)
 yy <- mod$run(20)
@@ -63,12 +64,12 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
                                                 adj_K_end=0,
                                                 adj_r_end=0), time=0, n_particles = 1)
 
-contr_data <- function(observed, model, sd){
+contribution_data <- function(observed, model, sd){
   (observed-model)/sd^2
 }
 
 for(i in seq_along(t_obs)[-n_obs]){
-  adj_N_curr <- adj_N_curr + contr_data(N_curr, y_curr, sd_noise)
+  adj_N_curr <- adj_N_curr + contribution_data(N_curr, y_curr, sd_noise)
   reverse_mod$initialize(pars= list(r=1,
                                     N_end=N_curr,
                                     t_end=t_curr,
@@ -84,13 +85,11 @@ for(i in seq_along(t_obs)[-n_obs]){
   adj_r_curr <- reverse_mod$info()$index$adj_r
 }
 
-
-
 reverse_mod$info()$index
 
 ##As we can see this is slightly unstable!!!
 ##plot the error
-plot(reverse_y[2,81:1], reverse_y[1,81:1]- y[1:81])
+#plot(reverse_y[2,81:1], reverse_y[1,81:1]- y[1:81])
 
 #Let's try to do the same now by refreshing the state at each observation point
 for(i in seq_along(t_obs[-1])){
