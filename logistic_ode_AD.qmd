@@ -53,11 +53,12 @@ where:
 - $r$ is the growth rate or steepness of the curve
 - $N_{0}$ is the initial condition of the ODE 
 
-## Equation Form
+## Equation Form and observation model
 
-The equation form of the logistic function is given by:
-
+- The equation form of the logistic function is given by:
 $$N(t) = \frac{K}{1 + \left ( \frac{K}{N_{0}}-1 \right ) e^{-rt}}$$
+- We also add an observation model
+$$N_{obs, t} \sim \mathcal{N}(N(t), \sigma),\; t \in T_{obs}=\{ t_{1},...,t_{n_{obs}} \}$$
 
 ## odin model with normal observation model
 
@@ -85,9 +86,27 @@ r_output("models/logistic_growth_normal_obs.R")
 
 The model has 4 parameters $r$, $K$, $N_{0}$ and $\sigma$ the standard deviation of the observation process
 
+## Gradient of log-likelihood (1)
+
+The log-likelihood of the model is:
+$$\log(L) = \sum_{t \in T_{obs}} \log \left( f(N_{obs,t}, N(t), \sigma \right )$$
+with $N_{obs,t},t \in T_{obs}$ the observations and f the pdf of the Normal distribution.
+
+So for a parameter $X \in \{ r,K,N_{0} \}$, we have
+$$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0}}$$
+
+## Gradient of log-likelihood (2) {.smaller}
+
+The log of the normal pdf is
+$$ \log (f) = -\log \sigma - \frac{1}{2} \log (2\pi) - \frac{1}{2 \sigma^2} ( N_{obs}-N )^2$$
+So we have
+$$ \frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} = \frac{N_{obs}-N}{\sigma^2}$$ 
+and $$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{N_{obs}-N}{\sigma^2} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0}}$$
+
+
 ## Logistic function plot
 
-We can use odin to integrate the ODE:
+We can use odin.dust to integrate the ODE:
 
 ```{r}
 #| echo: TRUE
