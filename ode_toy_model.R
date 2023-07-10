@@ -114,3 +114,47 @@ D(ff, "N0")
 
 ff3 <- parse(text="-log(sigma)-1/2*((N_obs-N)/sigma)^2")
 D(ff3, "N")
+
+#Not working analysis - self-contained code
+
+#odin_dust model
+generator <- odin.dust::odin_dust("
+deriv(N) <- r * N * (1 - N / K)
+initial(N) <- N0
+
+N0 <- user(1)
+K <- user(100)
+r <- user()
+
+sd_noise <- user()
+
+observed <- data()
+compare(observed) ~ normal(N, sd_noise)")
+
+#default parameters
+N0 <- 2
+K <- 100
+r <- 1
+
+#generating "data"
+mod <- generator$new(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
+
+n_obs <- 20
+t_obs <- seq(1, n_obs)
+t0 <- log(K/N0-1)/r #computes the mid-point time (t0 such that N(t0)=K/2)
+N_obs <- K/(1+exp(-r*(t_obs-t0))) #derive the analytical solution model
+sd_noise <- 5
+d_df <- data.frame(time = t_obs,
+                   observed = rnorm(N_obs,N_obs, sd_noise))
+
+#creates data for pf
+d_df$t <- d_df$time #rename to respect convention
+pf_data <- mcstate::particle_filter_data(d_df, "t", rate=NULL, initial_time = 0)
+
+#cannot create the pf
+mcstate::particle_filter$new(data=pf_data, generator, n_particles = 1, compare = NULL)
+
+
+
+
+
