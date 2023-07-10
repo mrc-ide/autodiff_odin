@@ -8,10 +8,10 @@ format:
 
 # Automatic Differentiation
 
-## General principles
+## General principles {.smaller}
 
-- Based on Chen et al.
-![](images/ode_AD_chen.png){.absolute top=200 left=0 width="435" height="300"}
+- Based on Chen et al. "Neural Ordinary Differential Equations", NeurIPS 2018
+![](images/ode_AD_chen.png){.absolute top=200 left=0 width="652" height="450"}
 
 ## Comparison with discrete AD algorithm {.smaller}
 
@@ -27,12 +27,13 @@ very similar algorithm
 
 # Worked example: logistic function
 
-## About the logistic function
+## About the logistic (growth) function
 
-- Simple 1-D ode modelling growth with saturation
+- Simple population growth model with saturation
+- 1-D ODE
 - Three parameters 
 - Known analytical solution
-- Non linear
+- Non-linear
 
 ## ODE Form {.smaller}
 
@@ -53,15 +54,16 @@ where:
 - $r$ is the growth rate or steepness of the curve
 - $N_{0}$ is the initial condition of the ODE 
 
-## Equation Form and observation model
+## Equation form and observation model
 
 - The equation form of the logistic function is given by:
 $$N(t) = \frac{K}{1 + \left ( \frac{K}{N_{0}}-1 \right ) e^{-rt}}$$
-- We also add an observation model
-$$N_{obs, t} \sim \mathcal{N}(N(t), \sigma),\; t \in T_{obs}=\{ t_{1},...,t_{n_{obs}} \}$$
+- We can also add an observation model
+$$N^{obs}_{t} \sim \mathcal{N}(N(t), \sigma),\; t \in T_{obs}=\{ t_{1},...,t_{n_{obs}} \}$$
 
-## odin model with normal observation model
+## odin model
 
+very compact and easy to read
 ```{r}
 r_output <- function(path, highlight = NULL) {
   if (is.null(highlight)) {
@@ -84,25 +86,7 @@ knitr::knit_hooks$set(small_margins = function(before, options, envir) {
 r_output("models/logistic_growth_normal_obs.R")
 ```
 
-The model has 4 parameters $r$, $K$, $N_{0}$ and $\sigma$ the standard deviation of the observation process
-
-## Gradient of log-likelihood (1)
-
-The log-likelihood of the model is:
-$$\log(L) = \sum_{t \in T_{obs}} \log \left( f(N_{obs,t}, N(t), \sigma \right )$$
-with $N_{obs,t},t \in T_{obs}$ the observations and f the pdf of the Normal distribution.
-
-So for a parameter $X \in \{ r,K,N_{0} \}$, we have
-$$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0}}$$
-
-## Gradient of log-likelihood (2) {.smaller}
-
-The log of the normal pdf is
-$$ \log (f) = -\log \sigma - \frac{1}{2} \log (2\pi) - \frac{1}{2 \sigma^2} ( N_{obs}-N )^2$$
-So we have
-$$ \frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} = \frac{N_{obs}-N}{\sigma^2}$$ 
-and $$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{N_{obs}-N}{\sigma^2} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0}}$$
-
+The model (including noisy observation) has 4 parameters $r$, $K$, $N_{0}$ and $\sigma$ the s.d. of the observation process
 
 ## Logistic function plot
 
@@ -129,10 +113,10 @@ t_obs <- seq(1, n_obs)
 #Plot the trajectory
 tt <- seq(0, 25, length.out = 101)
 y <- mod$simulate(tt)[,1,]
-plot(tt, y, xlab = "Time", ylab = "N", main = "", type="l", ylim= c(0,120), lty=1)
+plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=1)
 ```
 
-## Generating observations using analytical formula
+## Logistic function plot
 
 ```{r plot-observations}
 n_obs <- 20
@@ -149,13 +133,86 @@ N_obs <- K/(1+exp(-r*(t_obs-t0)))
 sd_noise <- 5
 d_df <- data.frame(time = t_obs,
                    observed = rnorm(N_obs,N_obs, sd_noise))
-plot(tt, y, xlab = "Time", ylab = "N", main = "", type="l", ylim= c(0,120), lty=3)
+plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=3)
 points(t_obs, N_obs, pch=19, col="grey")
 points(t_obs, d_df$observed, pch=19, col="black")
 for(i in seq_along(t_obs)){
   lines(c(t_obs[i],t_obs[i]), c(N_obs[i],d_df$observed[i]))
 }
 ```
+
+## Gradient of log-likelihood (1) {.smaller}
+
+The log-likelihood of the model is:
+$$\log(L) = \sum_{t \in T_{obs}} \log \left( f(N^{obs}_{t}, N(t), \sigma ) \right )$$
+with
+
+- $N^{obs}_{t},t \in T_{obs}$ the observations
+- $f$ the pdf of the Normal distribution
+
+$\frac{\partial \log(L)}{\partial \sigma}$ can be calculated relatively easily and 
+for partial derivatives wrt parameter $X \in \{ r,K,N_{0} \}$, we can use:
+$$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0}}$$
+
+## Gradient of log-likelihood (2) {.smaller}
+
+The log of the normal pdf is
+$$ \log (f) = -\log \sigma - \frac{1}{2} \log (2\pi) - \frac{1}{2 \sigma^2} ( N^{obs}-N )^2$$
+So we have
+
+$$\frac{\partial \log(L)} {\partial \sigma} = - \sum_{t \in T_{obs}} \left ( \frac{1}{\sigma} +\frac{1}{\sigma^3}(N^{obs}_{t}-N)^2 \right ) $$
+
+and we also get 
+$$\frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} = \frac{N^{obs}-N}{\sigma^2}$$ 
+
+## Gradient of log-likelihood (3) {.smaller}
+
+So for $X \in \{ r,K,N_{0} \}$ we finally get
+$$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{N^{obs}_{t}-N}{\sigma^2} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0}}$$
+
+To which we need to plug the partial derivatives with respect to $r$, $K$, $N_{0}$
+
+$$
+\begin{cases}
+\begin{align*}
+\frac{{\partial N(t)}}{{\partial r}} & = \frac{{K \cdot t \cdot (K - N_0) \cdot e^{-rt}}}{{N_0 \cdot \left(1 + \left ( \frac{K}{N_{0}}-1 \right ) \cdot e^{-rt}\right)^2}} \\
+\frac{{\partial N(t)}}{{\partial K}}  & = \frac{1}{{\left(1 + \left ( \frac{K}{N_{0}}-1 \right ) \cdot e^{-rt}\right)^2}} \\
+\frac{{\partial N(t)}}{{\partial N_0}} & = - \frac{{K \cdot e^{-rt}}}{{N_0^2 \cdot \left(1 + \left(\frac{{K}}{{N_0}}-1\right) \cdot e^{-rt}\right)^2}}
+\end{align*}
+\end{cases}
+$$
+
+## We can get R code for these
+
+```{r, eval = FALSE}
+#| echo: TRUE
+# Gradient function with respect to K
+partial_derivative_K <- function(K, N0, r, t) {
+  gradient <- 1 / (1 + ((K - N0) / N0) * exp(-r * t))^2
+  return(gradient)
+}
+
+# Gradient function with respect to N0
+partial_derivative_N0 <- function(K, N0, r, t) {
+  gradient <- (-K / N0^2) * exp(-r * t) / (1 + ((K - N0) / N0) * exp(-r * t))^2
+  return(gradient)
+}
+
+# Gradient function with respect to r
+partial_derivative_r <- function(K, N0, r, t) {
+  gradient <- (K * t * (K - N0) * exp(-r * t)) / (N0 * (1 + ((K - N0) / N0) * exp(-r * t))^2)
+  return(gradient)
+}
+```
+
+## Gradient of log-likelihood
+
+We this get painfully a function giving the gradient of the log-likelihood of our model:
+
+Note that the trick work only because we had an exact solution of the ode!
+
+
+
 
 
 
