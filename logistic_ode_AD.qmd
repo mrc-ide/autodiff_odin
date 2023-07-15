@@ -160,7 +160,7 @@ The log of the normal pdf is
 $$ \log (f) = -\log \sigma - \frac{1}{2} \log (2\pi) - \frac{1}{2 \sigma^2} ( N^{obs}-N )^2$$
 So we have
 
-$$\frac{\partial \log(L)} {\partial \sigma} = - \sum_{t \in T_{obs}} \left ( \frac{1}{\sigma} +\frac{1}{\sigma^3}(N^{obs}_{t}-N)^2 \right ) $$
+$$\frac{\partial \log(L)} {\partial \sigma} = \sum_{t \in T_{obs}} \left ( -\frac{1}{\sigma} +\frac{1}{\sigma^3}(N^{obs}_{t}-N)^2 \right ) $$
 
 and we also get 
 $$\frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} = \frac{N^{obs}-N}{\sigma^2}$$ 
@@ -264,7 +264,7 @@ likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
     N_t <- K/(1+exp(-r*(t_obs[i]-t0)))
     
     #Calculate the simpler PD wrt sigma
-    g_LL_sigma <- g_LL_sigma + 1/sigma + 1/sigma^3*(N_obs[i]- N_t)^2
+    g_LL_sigma <- g_LL_sigma - 1/sigma + 1/sigma^3*(N_obs[i]- N_t)^2
     
     #Normal pdf contribution
     dlogf_dN <- (N_obs[i]- N_t)/sigma^2
@@ -305,7 +305,7 @@ t_curr <- t_obs[last_obs]
 adj_N_curr <- 0
 adj_K_curr <- 0
 adj_r_curr <- 0
-y_curr <- y_end
+adj_sigma_curr <- 0
 
 reverse_mod <- generator_reverse$new(pars= list(r=1,
                                                 N_end=N_curr,
@@ -318,8 +318,14 @@ contribution_data <- function(observed, model, sd){
   (observed-model)/sd^2
 }
 
-for(i in seq_along(t_obs)[-n_obs]){
+contribution_data_sigma <- function(observed, model, sd){
+  -1/sd + (observed-model)^2/sd^3
+}
+
+for(i in seq_along(t_obs)){
+  y_curr <- d_df$observed[n_obs-i+1]
   adj_N_curr <- adj_N_curr + contribution_data(N_curr, y_curr, sd_noise)
+  adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(N_curr, y_curr, sd_noise)
   reverse_mod$initialize(pars= list(r=1,
                                     N_end=N_curr,
                                     t_end=t_curr,
@@ -328,11 +334,11 @@ for(i in seq_along(t_obs)[-n_obs]){
                                     adj_r_end=adj_r_curr), time=0, n_particles = 1)
   reverse_mod$run(t_curr-t_obs[n_obs-i])
 
-  N_curr <- reverse_mod$info()$index$N
+  N_curr <- reverse_mod$state()[reverse_mod$info()$index$N]
   t_curr <- t_obs[n_obs-i]
-  adj_N_curr <- reverse_mod$info()$index$adj_N
-  adj_K_curr <- reverse_mod$info()$index$adj_K
-  adj_r_curr <- reverse_mod$info()$index$adj_r
+  adj_N_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_N]
+  adj_K_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_K]
+  adj_r_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_r]
 }
 ```
 
@@ -342,9 +348,20 @@ for(i in seq_along(t_obs)[-n_obs]){
 reverse_mod$state()[adj_N_curr] 
 reverse_mod$state()[adj_K_curr]
 reverse_mod$state()[adj_r_curr]
+adj_sigma_curr
 ```
 
 ## Gradient using numerical differentiation
+
+```{r}
+d_df$t <- d_df$time #rename to respect convention
+pf_data <- mcstate::particle_filter_data(d_df, "t", rate=NULL, initial_time = 0)
+
+#cannot create the pf
+filter <- mcstate::particle_filter$new(data=pf_data, generator, n_particles = 1, compare = NULL)
+h <- 1e-6
+(filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5+h))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
+```
 
 
 ## Running Gradient descent
