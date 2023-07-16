@@ -10,8 +10,28 @@ format:
 
 ## General principles {.smaller}
 
-- Based on Chen et al. "Neural Ordinary Differential Equations", NeurIPS 2018
-![](images/ode_AD_chen.png){.absolute top=200 left=0 width="652" height="450"}
+![](images/ode_AD_chen.png){.absolute top=200 left=500 width="652" height="450"}
+
+:::: {.columns}
+
+::: {.column width="30%"}
+
+- Adjoints
+$$a(t) = \frac{\partial L}{\partial z(t)}$$
+- "Continuous" chain rule
+$$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$$ 
+- Parameter "continuous" accumulation $$\frac{dL}{d \theta} = \int_{t_{1}}^{t_{0}} a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}dt$$  
+:::
+
+::: {.column width="20%"}
+:::
+
+::: {.column width="50%"}
+[Chen et al. "Neural Ordinary Differential Equations", NeurIPS 2018](https://proceedings.neurips.cc/paper_files/paper/2018/file/69386f6bb1dfed68692a24c8686939b9-Paper.pdf)
+:::
+
+::::
+
 
 ## Comparison with "discrete" AD {.smaller}
 
@@ -35,7 +55,7 @@ very similar algorithm
 - Known analytical solution
 - Non-linear
 
-## ODE Form {.smaller}
+## ODE form {.smaller}
 
 The ODE form of the logistic function is:
 
@@ -116,7 +136,7 @@ y <- mod$simulate(tt)[,1,]
 plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=1)
 ```
 
-## Logistic function plot + observations
+## Logistic function plot + observations {visibility="uncounted"}
 
 ```{r plot-observations}
 n_obs <- 20
@@ -141,7 +161,7 @@ for(i in seq_along(t_obs)){
 }
 ```
 
-## Gradient of log-likelihood (1) {.smaller}
+## Analytical gradient (1) {.smaller}
 
 The log-likelihood of the model is:
 $$\log(L) = \sum_{t \in T_{obs}} \log \left( f(N^{obs}_{t}, N(t), \sigma ) \right )$$
@@ -154,7 +174,7 @@ $\frac{\partial \log(L)}{\partial \sigma}$ can be calculated relatively easily a
 for partial derivatives wrt parameter $X \in \{ r,K,N_{0} \}$, we can use:
 $$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{\partial \log (f)}{\partial N} \bigg|_{N^{obs}_{t},N(t), \sigma} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0},t}$$
 
-## Gradient of log-likelihood (2) {.smaller}
+## Analytical gradient (2) {.smaller}
 
 The log of the normal pdf is
 $$ \log (f) = -\log \sigma - \frac{1}{2} \log (2\pi) - \frac{1}{2 \sigma^2} ( N^{obs}-N )^2$$
@@ -165,7 +185,7 @@ $$\frac{\partial \log(L)} {\partial \sigma} = \sum_{t \in T_{obs}} \left ( -\fra
 and we also get 
 $$\frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} = \frac{N^{obs}-N}{\sigma^2}$$ 
 
-## Gradient of log-likelihood (3) {.smaller}
+## Analytical gradient (3) {.smaller}
 
 So for $X \in \{ r,K,N_{0} \}$ we finally get
 $$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{N^{obs}_{t}-N}{\sigma^2} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0},t}$$
@@ -182,7 +202,7 @@ $$
 \end{cases}
 $$
 
-## We can get R code for these
+## We can write R code for these
 
 ```{r, eval = FALSE}
 #| echo: TRUE
@@ -225,36 +245,11 @@ partial_derivative_r <- function(K, N0, r, t) {
 }
 ```
 
-## and R code for the full likelihood gradient
-
-```{r, eval = FALSE}
-#| echo: TRUE
-likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
-  t0 <- log(K/N0-1)/r
-  g_LL_K <- 0
-  g_LL_N0 <- 0
-  g_LL_r <- 0
-  g_LL_sigma <- 0
-  for(i in seq_along(t_obs)){
-    N_t <- K/(1+exp(-r*(t_obs[i]-t0)))
-    
-    #Calculate the simpler PD wrt sigma
-    g_LL_sigma <- g_LL_sigma + 1/sigma + 1/sigma^3*(N_obs[i]- N_t)^2
-    
-    #Normal pdf contribution
-    dlogf_dN <- (N_obs[i]- N_t)/sigma^2
-    g_LL_K <- g_LL_K + dlogf_dN * partial_derivative_K(K, N0, r, t_obs[i])
-    g_LL_N0 <- g_LL_N0 + dlogf_dN * partial_derivative_N0(K, N0, r, t_obs[i])
-    g_LL_r <- g_LL_r + dlogf_dN * partial_derivative_r(K, N0, r, t_obs[i])
-  
-  }
-  return(list(sigma = g_LL_sigma, K = g_LL_K, g_LL_N0, g_LL_r))
-}
-```
+## and for the full likelihood gradient
 
 ```{r}
+#| echo: TRUE
 likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
-  #browser()
   t0 <- log(K/N0-1)/r
   g_LL_K <- 0
   g_LL_N0 <- 0
@@ -273,16 +268,17 @@ likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
     g_LL_r <- g_LL_r + dlogf_dN * partial_derivative_r(K, N0, r, t_obs[i])
   
   }
-  return(list(sigma = g_LL_sigma, K = g_LL_K, N0 = g_LL_N0, r = g_LL_r))
+  return(list(sigma = g_LL_sigma, N0 = g_LL_N0, K = g_LL_K, r = g_LL_r))
 }
 ```
 
-## Gradient of log-likelihood
+## Analytical gradient results
 
 We this get painfully a function giving the gradient of the log-likelihood of our model:
 ```{r}
 #| echo: TRUE
-likelihood_gradient(K, N0, r, sd_noise, d_df$observed, t_obs)
+gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed, t_obs)
+gradient_analytical
 ```
 
 Note that the trick work only because we had an exact solution of the ode!
@@ -332,7 +328,9 @@ for(i in seq_along(t_obs)){
                                     adj_N_end=adj_N_curr,
                                     adj_K_end=adj_K_curr,
                                     adj_r_end=adj_r_curr), time=0, n_particles = 1)
-  reverse_mod$run(t_curr-t_obs[n_obs-i])
+  
+  flow_time <- if(n_obs>i) t_curr-t_obs[n_obs-i] else t_curr
+  reverse_mod$run(flow_time)
 
   N_curr <- reverse_mod$state()[reverse_mod$info()$index$N]
   t_curr <- t_obs[n_obs-i]
@@ -342,27 +340,49 @@ for(i in seq_along(t_obs)){
 }
 ```
 
-## Gradient using autodiff
+## Autodiff gradient (1)
+
+We first need to run backward the state equations
+
+## Autodiff gradient (2)
 ```{r}
 #| echo: TRUE
-reverse_mod$state()[adj_N_curr] 
-reverse_mod$state()[adj_K_curr]
-reverse_mod$state()[adj_r_curr]
-adj_sigma_curr
+gradient_AD <- c(
+adj_sigma_curr,
+reverse_mod$state()[reverse_mod$info()$index$adj_N],
+reverse_mod$state()[reverse_mod$info()$index$adj_K],
+reverse_mod$state()[reverse_mod$info()$index$adj_r])
+name_var <- c("sigma","N","K","r")
 ```
 
-## Gradient using numerical differentiation
+## Numerical differentiation gradient
 
-```{r}
-d_df$t <- d_df$time #rename to respect convention
+```{r numerical differentiation}
+#| echo: TRUE
+#creates data for pf
+d_df$t <- d_df$time #rename to respect convention that time should not be called time ;)
 pf_data <- mcstate::particle_filter_data(d_df, "t", rate=NULL, initial_time = 0)
 
-#cannot create the pf
+#creating the filter
 filter <- mcstate::particle_filter$new(data=pf_data, generator, n_particles = 1, compare = NULL)
 h <- 1e-6
-(filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5+h))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
+ND_sigma <- (filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5+h))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
+ND_N <- (filter$run(pars=list(r=r, N0=N0+h, K=K, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
+ND_K <- (filter$run(pars=list(r=r, N0=N0, K=K+h, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
+ND_r <- (filter$run(pars=list(r=r+h, N0=N0, K=K, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
+
+gradient_ND <- c(ND_sigma,ND_N,ND_K,ND_r)
+gradient_ND
 ```
 
+## Comparison of the different methods
+
+```{r}
+knitr::kable(data.frame(Variable = name_var,
+                        AD = gradient_AD,
+                        analytical = unlist(gradient_analytical),
+                        ND = gradient_ND))
+```
 
 ## Running Gradient descent
 
