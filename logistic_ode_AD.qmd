@@ -6,9 +6,9 @@ format:
     slide-number: c/t
 ---
 
-# Automatic Differentiation
+# Principles
 
-## General principles {.smaller}
+## General {.smaller}
 
 ![](images/ode_AD_chen.png){.absolute top=200 left=500 width="652" height="450"}
 
@@ -197,14 +197,14 @@ $$
 \begin{align*}
 \frac{{\partial N(t)}}{{\partial r}} & = \frac{{K \cdot t \cdot (K - N_0) \cdot e^{-rt}}}{{N_0 \cdot \left(1 + \left ( \frac{K}{N_{0}}-1 \right ) \cdot e^{-rt}\right)^2}} \\
 \frac{{\partial N(t)}}{{\partial K}}  & = \frac{1}{{\left(1 + \left ( \frac{K}{N_{0}}-1 \right ) \cdot e^{-rt}\right)^2}} \\
-\frac{{\partial N(t)}}{{\partial N_0}} & = - \frac{{K \cdot e^{-rt}}}{{N_0^2 \cdot \left(1 + \left(\frac{{K}}{{N_0}}-1\right) \cdot e^{-rt}\right)^2}}
+\frac{{\partial N(t)}}{{\partial N_0}} & = \frac{{K^2 \cdot e^{-rt}}}{{N_0^2 \cdot \left(1 + \left(\frac{{K}}{{N_0}}-1\right) \cdot e^{-rt}\right)^2}}
 \end{align*}
 \end{cases}
 $$
 
 ## We can write R code for these
 
-```{r, eval = FALSE}
+```{r}
 #| echo: TRUE
 # Gradient function with respect to K
 partial_derivative_K <- function(K, N0, r, t) {
@@ -214,27 +214,7 @@ partial_derivative_K <- function(K, N0, r, t) {
 
 # Gradient function with respect to N0
 partial_derivative_N0 <- function(K, N0, r, t) {
-  gradient <- (-K / N0^2) * exp(-r * t) / (1 + ((K - N0) / N0) * exp(-r * t))^2
-  return(gradient)
-}
-
-# Gradient function with respect to r
-partial_derivative_r <- function(K, N0, r, t) {
-  gradient <- (K * t * (K - N0) * exp(-r * t)) / (N0 * (1 + ((K - N0) / N0) * exp(-r * t))^2)
-  return(gradient)
-}
-```
-
-```{r}
-# Gradient function with respect to K
-partial_derivative_K <- function(K, N0, r, t) {
-  gradient <- 1 / (1 + ((K - N0) / N0) * exp(-r * t))^2
-  return(gradient)
-}
-
-# Gradient function with respect to N0
-partial_derivative_N0 <- function(K, N0, r, t) {
-  gradient <- (-K / N0^2) * exp(-r * t) / (1 + ((K - N0) / N0) * exp(-r * t))^2
+  gradient <- (K^2 / N0^2) * exp(-r * t) / (1 + ((K - N0) / N0) * exp(-r * t))^2
   return(gradient)
 }
 
@@ -274,14 +254,14 @@ likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
 
 ## Analytical gradient results
 
-We this get painfully a function giving the gradient of the log-likelihood of our model:
+We then get painfully the gradient of the log-likelihood of our model:
 ```{r}
 #| echo: TRUE
 gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed, t_obs)
 gradient_analytical
 ```
 
-Note that the trick work only because we had an exact solution of the ode!
+Note that the trick only worked because we had an exact solution of the ode!
 
 ## Gradient using autodiff
 
