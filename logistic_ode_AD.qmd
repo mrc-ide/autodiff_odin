@@ -10,7 +10,7 @@ format:
 
 ## General {.smaller}
 
-![](images/ode_AD_chen.png){.absolute top=200 left=500 width="652" height="450"}
+![](images/ode_AD_chen.png){.absolute top=180 left=500 width="652" height="450"}
 
 :::: {.columns}
 
@@ -27,7 +27,7 @@ $$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z
 :::
 
 ::: {.column width="50%"}
-[Chen et al. "Neural Ordinary Differential Equations", NeurIPS 2018](https://proceedings.neurips.cc/paper_files/paper/2018/file/69386f6bb1dfed68692a24c8686939b9-Paper.pdf)
+[Chen et al. "Neural Ordinary Differential Equations", *NeurIPS 2018*](https://proceedings.neurips.cc/paper_files/paper/2018/file/69386f6bb1dfed68692a24c8686939b9-Paper.pdf)
 :::
 
 ::::
@@ -54,6 +54,8 @@ very similar algorithm
 - Three parameters 
 - Known analytical solution
 - Non-linear
+
+![](images/Pierre_Francois_Verhulst.jpeg){.absolute top=250 left=800 width="120" height="181"}
 
 ## ODE form {.smaller}
 
@@ -187,7 +189,7 @@ $$\frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} = \frac{N^{obs}-N}{
 
 ## Analytical gradient (3) {.smaller}
 
-So for $X \in \{ r,K,N_{0} \}$ we finally get
+So for $X \in \{ r,K,N_{0} \}$ we get
 $$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{N^{obs}_{t}-N}{\sigma^2} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0},t}$$
 
 To which we need to plug the partial derivatives with respect to $r$, $K$, $N_{0}$
