@@ -58,3 +58,6 @@ animation/
 
 # animation files
 *.mp4
+
+# specific mac files
+.DS_Store
