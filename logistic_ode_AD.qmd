@@ -265,16 +265,30 @@ gradient_analytical
 
 Note that the trick only worked because we had an exact solution of the ode!
 
-## Gradient using autodiff
 
+
+## Autodiff gradient (1)
+
+**Idea:** After a pass forward, we are looping through the observation points backward in time going from one state to the other using a system of ODEs containing:
+
+(1) the states;
+(2) the ajoints of the states;
+(3) the adjoints of parameters (apart from compare or initial conditions ones)
+
+## Autodiff gradient (1)
+
+Forward pass:
 ```{r}
+#| echo: TRUE
 #Run system until last observation
 last_obs <- length(t_obs)
 mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
-d <- dust::dust_data(d_df)
-mod$set_data(d)
 y_end <- mod$run(last_obs)
+```
 
+## Gradient using autodiff
+
+```{r}
 #reversing the ode's
 generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
 
@@ -322,11 +336,11 @@ for(i in seq_along(t_obs)){
 }
 ```
 
-## Autodiff gradient (1)
+## Autodiff gradient (2)
 
 We first need to run backward the state equations
 
-## Autodiff gradient (2)
+## Autodiff gradient (3)
 ```{r}
 #| echo: TRUE
 gradient_AD <- c(
@@ -334,13 +348,18 @@ adj_sigma_curr,
 reverse_mod$state()[reverse_mod$info()$index$adj_N],
 reverse_mod$state()[reverse_mod$info()$index$adj_K],
 reverse_mod$state()[reverse_mod$info()$index$adj_r])
-name_var <- c("sigma","N","K","r")
+name_var <- c("sigma","N0","K","r")
 ```
 
 ## Numerical differentiation gradient
 
 ```{r numerical differentiation}
 #| echo: TRUE
+
+#TODO: do we need this if data is used in the PF?
+d <- dust::dust_data(d_df)
+mod$set_data(d)
+
 #creates data for pf
 d_df$t <- d_df$time #rename to respect convention that time should not be called time ;)
 pf_data <- mcstate::particle_filter_data(d_df, "t", rate=NULL, initial_time = 0)
