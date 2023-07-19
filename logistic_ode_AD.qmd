@@ -265,8 +265,6 @@ gradient_analytical
 
 Note that the trick only worked because we had an exact solution of the ode!
 
-
-
 ## Autodiff gradient (1)
 
 **Idea:** After a pass forward, we are looping through the observation points backward in time going from one state to the other using a system of ODEs containing:
@@ -277,7 +275,7 @@ Note that the trick only worked because we had an exact solution of the ode!
 
 ## Autodiff gradient (1)
 
-Forward pass:
+- We run the ODEs forward to get the end point:
 ```{r}
 #| echo: TRUE
 #Run system until last observation
@@ -286,7 +284,46 @@ mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
 y_end <- mod$run(last_obs)
 ```
 
-## Gradient using autodiff
+
+
+## Autodiff gradient (2) {.smaller}
+
+- We then need to run backward the state equations
+- Running backward in time = change of variable $\rightarrow s = t_{end}-t$
+- The ODE system $\frac{dz(t)}{dt}=f(z(t),t,\theta)$ then becomes
+$$
+\begin{align*}
+\frac{dz(s)}{ds} &= \frac{dz(t)}{dt}\frac{dt}{ds} \\
+ &= -f(z(t_{end}-s),t_{end}-s,\theta)
+\end{align*}
+$$
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+- Forward version
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(N) <- r * N * (1 - N / K)
+initial(N) <- N0
+```
+:::
+
+::: {.column width="50%"}
+
+- Backward version
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(N) <- r * N * (N / K - 1)
+initial(N) <- N_end
+```
+:::
+
+::::
+
+
+## Compiling the reverse-with-adjoints model
 
 ```{r}
 #reversing the ode's
@@ -335,10 +372,6 @@ for(i in seq_along(t_obs)){
   adj_r_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_r]
 }
 ```
-
-## Autodiff gradient (2)
-
-We first need to run backward the state equations
 
 ## Autodiff gradient (3)
 ```{r}
