@@ -49,3 +49,12 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# files generated for quarto presentations
+*_files/
+
+# files for animation
+animation/
+
+# animation files
+*.mp4
