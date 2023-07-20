@@ -4,6 +4,7 @@ author: "Marc Baguelin"
 format:
   revealjs:
     slide-number: c/t
+    footer: "[AutoDiff with odin (ODE systems)](https://www.imperial.ac.uk/people/m.baguelin)"
 ---
 
 # Principles
@@ -265,6 +266,34 @@ gradient_analytical
 
 Note that the trick only worked because we had an exact solution of the ode!
 
+## Building the dependency graph
+
+First let's build the graph of dependencies in the main odin model
+
+```{r}
+#| echo: TRUE
+parsed_model <- jsonlite::fromJSON(odin::odin_parse("models/logistic_growth_normal_obs.R"))
+construct_param_tree <- function(parsed_model){
+  parameter_graph <- NULL
+  for(n in seq_along(parsed_model$equations$name)){
+    if(!is.null(parsed_model$equations$depends$variables[n][[1]])){
+      for(p in eval(parsed_model$equations$depends$variables[n][[1]]))
+        parameter_graph <- rbind(parameter_graph,
+                                 c(p,parsed_model$equations$name[n]))
+    }
+  }
+  igraph::graph_from_edgelist(parameter_graph)
+}
+param_graph <- construct_param_tree(parsed_model)
+```
+
+## Dependency graph
+
+```{r}
+#| echo: TRUE
+igraph::print_all(param_graph)
+```
+
 ## Autodiff gradient (1)
 
 **Idea:** After a pass forward, we are looping through the observation points backward in time going from one state to the other using a system of ODEs containing:
@@ -302,7 +331,7 @@ $$
 
 ::: {.column width="50%"}
 
-- Forward version
+Forward version
 ```{r, eval=FALSE}
 #| echo: TRUE
 deriv(N) <- r * N * (1 - N / K)
@@ -312,7 +341,7 @@ initial(N) <- N0
 
 ::: {.column width="50%"}
 
-- Backward version
+Backward version
 ```{r, eval=FALSE}
 #| echo: TRUE
 deriv(N) <- r * N * (N / K - 1)
