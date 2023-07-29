@@ -33,6 +33,10 @@ $$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z
 
 ::::
 
+## Thoughts on the general case & Jacobian-vector product
+
+- General case is $$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$$
+- RHS is the Jacobian-Vector product (jvp)
 
 ## Comparison with "discrete" AD {.smaller}
 
@@ -302,7 +306,7 @@ igraph::print_all(param_graph)
 (2) the ajoints of the states;
 (3) the adjoints of parameters (apart from compare or initial conditions ones)
 
-## Autodiff gradient (1)
+## Forward pass
 
 - We run the ODEs forward to get the last observation point:
 ```{r}
@@ -313,9 +317,7 @@ mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
 y_end <- mod$run(last_obs)
 ```
 
-
-
-## Autodiff gradient (2) {.smaller}
+## Backward state equations {.smaller}
 
 - We then need to run backward the state equations
 - Running backward in time = change of variable $\rightarrow s = t_{end}-t$
@@ -350,11 +352,9 @@ initial(N) <- N_end
 :::
 ::::
 
-## Autodiff gradient (3) {.smaller}
+## Adjoint state equations {.smaller}
 
-- The next step is to derive the equations for the adjoint states $a_{N}(t) = \frac{\partial L}{\partial N(t)}$
-
-- The "continuous" chain rule involves the Jacobian $\frac{\partial f(z(t),t,\theta)}{\partial z}$ with only one state variable here so
+- At the same time, we run the adjoint state equations
 
 :::: {.columns}
 
@@ -372,28 +372,37 @@ $\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}
 $\frac{da_{N}(t)}{dt}=-a_{N}(t) \frac{d \left [ rN \left ( 1- \frac{N}{K}\right ) \right ]}{d N}$ 
 :::
 ::::
-
-Thus the resulting code
+- Only one state variable $N$
+- We compute the partial derivative of the RHS of deriv_N wrt to $N$
+```{r}
+#| echo: TRUE
+ff <- parse(text="r * N * (1 - N / K)")
+D(ff, "N")
+```
+- Which results in the following adjoint state equation
 ```{r, eval=FALSE}
 #| echo: TRUE
 deriv(adj_N) <- adj_N * r * (1- 2*N/K)
 initial(adj_N) <- adj_N_end
-``` 
+```
+- If we had more states, we would look at which other states the RHS depend on
 
-## Thoughts on the general case & Jacobian-vector product
+## Adjoint parameters equations
 
-- General case is $$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$$
-- RHS is the Jacobian-Vector product (jvp)
+
 
 ## Compiling the reverse-with-adjoints model
 
-```{r}
-#reversing the ode's
+```{r compile-reverse-with-adjoints}
+#| echo: TRUE
 generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
 ```
 
-## Initialising the state and adjoints
-```{r}
+## Initialising the states and adjoints
+
+- States initialised to last observation value
+- Adjoints initialised to 0
+```{r, reverse-initialisation}
 #| echo: TRUE
 N_curr <- N_obs[last_obs]
 t_curr <- t_obs[last_obs]
@@ -407,23 +416,22 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
                                                 t_end=t_curr,
                                                 adj_N_end=adj_N_curr,
                                                 adj_K_end=0,
-                                                adj_r_end=0), time=0, n_particles = 1)
-
-
+                                                adj_r_end=0),
+                                     time=0, n_particles = 1)
 ```
 
 ## Two functions giving the contributions of the data
 
 - Flowing to state adj_N
-```{r, eval=FALSE}
+```{r}
 #| echo: TRUE
-contribution_data <- function(observed, model, sd){
+contribution_data_adjoint <- function(observed, model, sd){
   (observed-model)/sd^2
 }
 ```
 
 - Flowing to observation parameter $\sigma$
-```{r, eval=FALSE}
+```{r}
 #| echo: TRUE
 contribution_data_sigma <- function(observed, model, sd){
   -1/sd + (observed-model)^2/sd^3
@@ -432,11 +440,11 @@ contribution_data_sigma <- function(observed, model, sd){
 
 ## Looping through observations
 
-```{r, eval=FALSE}
+```{r looping-ode-reverse-through-observations}
 #| echo: TRUE
 for(i in seq_along(t_obs)){
   y_curr <- d_df$observed[n_obs-i+1]
-  adj_N_curr <- adj_N_curr + contribution_data(N_curr, y_curr, sd_noise)
+  adj_N_curr <- adj_N_curr + contribution_data_adjoint(N_curr, y_curr, sd_noise)
   adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(N_curr, y_curr, sd_noise)
   reverse_mod$initialize(pars= list(r=1,
                                     N_end=N_curr,
@@ -459,6 +467,8 @@ for(i in seq_along(t_obs)){
 ```
 
 ## Autodiff gradient (3)
+
+Saving the end result
 ```{r}
 #| echo: TRUE
 gradient_AD <- c(
@@ -467,6 +477,12 @@ reverse_mod$state()[reverse_mod$info()$index$adj_N],
 reverse_mod$state()[reverse_mod$info()$index$adj_K],
 reverse_mod$state()[reverse_mod$info()$index$adj_r])
 name_var <- c("sigma","N0","K","r")
+```
+
+Which gives
+```{r}
+#| echo: TRUE
+gradient_AD
 ```
 
 ## Numerical differentiation gradient
