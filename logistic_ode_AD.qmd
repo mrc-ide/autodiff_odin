@@ -1,5 +1,5 @@
 ---
-title: "`Reverse Automatic Differentiation for odes with odin`"
+title: "`AutoDiff, ODEs and odin`"
 author: "Marc Baguelin"
 format:
   revealjs:
@@ -104,7 +104,7 @@ knitr::knit_hooks$set(small_margins = function(before, options, envir) {
 })
 ```
 
-```{r}
+```{r odin-code-logistic-with-observations}
 #| results: "asis"
 r_output("models/logistic_growth_normal_obs.R")
 ```
@@ -257,7 +257,7 @@ likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
 
 ## Analytical gradient results
 
-We then get painfully the gradient of the log-likelihood of our model:
+We then get (painfully) the gradient of the log-likelihood of our model:
 ```{r}
 #| echo: TRUE
 gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed, t_obs)
@@ -304,7 +304,7 @@ igraph::print_all(param_graph)
 
 ## Autodiff gradient (1)
 
-- We run the ODEs forward to get the end point:
+- We run the ODEs forward to get the last observation point:
 ```{r}
 #| echo: TRUE
 #Run system until last observation
@@ -348,16 +348,53 @@ deriv(N) <- r * N * (N / K - 1)
 initial(N) <- N_end
 ```
 :::
-
 ::::
 
+## Autodiff gradient (3) {.smaller}
+
+- The next step is to derive the equations for the adjoint states $a_{N}(t) = \frac{\partial L}{\partial N(t)}$
+
+- The "continuous" chain rule involves the Jacobian $\frac{\partial f(z(t),t,\theta)}{\partial z}$ with only one state variable here so
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+**General case**
+
+$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$ 
+:::
+
+::: {.column width="50%"}
+
+**Logistic growth example**
+
+$\frac{da_{N}(t)}{dt}=-a_{N}(t) \frac{d \left [ rN \left ( 1- \frac{N}{K}\right ) \right ]}{d N}$ 
+:::
+::::
+
+Thus the resulting code
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(adj_N) <- adj_N * r * (1- 2*N/K)
+initial(adj_N) <- adj_N_end
+``` 
+
+## Thoughts on the general case & Jacobian-vector product
+
+- General case is $$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$$
+- RHS is the Jacobian-Vector product (jvp)
 
 ## Compiling the reverse-with-adjoints model
 
 ```{r}
 #reversing the ode's
 generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
+```
 
+## Initialising the state and adjoints
+```{r}
+#| echo: TRUE
 N_curr <- N_obs[last_obs]
 t_curr <- t_obs[last_obs]
 adj_N_curr <- 0
@@ -372,14 +409,31 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
                                                 adj_K_end=0,
                                                 adj_r_end=0), time=0, n_particles = 1)
 
+
+```
+
+## Two functions giving the contributions of the data
+
+- Flowing to state adj_N
+```{r, eval=FALSE}
+#| echo: TRUE
 contribution_data <- function(observed, model, sd){
   (observed-model)/sd^2
 }
+```
 
+- Flowing to observation parameter $\sigma$
+```{r, eval=FALSE}
+#| echo: TRUE
 contribution_data_sigma <- function(observed, model, sd){
   -1/sd + (observed-model)^2/sd^3
 }
+```
 
+## Looping through observations
+
+```{r, eval=FALSE}
+#| echo: TRUE
 for(i in seq_along(t_obs)){
   y_curr <- d_df$observed[n_obs-i+1]
   adj_N_curr <- adj_N_curr + contribution_data(N_curr, y_curr, sd_noise)
@@ -389,7 +443,9 @@ for(i in seq_along(t_obs)){
                                     t_end=t_curr,
                                     adj_N_end=adj_N_curr,
                                     adj_K_end=adj_K_curr,
-                                    adj_r_end=adj_r_curr), time=0, n_particles = 1)
+                                    adj_r_end=adj_r_curr),
+                         time=0,
+                         n_particles = 1)
   
   flow_time <- if(n_obs>i) t_curr-t_obs[n_obs-i] else t_curr
   reverse_mod$run(flow_time)
