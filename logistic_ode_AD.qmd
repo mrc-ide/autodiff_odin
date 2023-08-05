@@ -2,12 +2,17 @@
 title: "`AutoDiff, ODEs and odin`"
 author: "Marc Baguelin"
 format:
-  revealjs:
+  tickle_ext-revealjs:
     slide-number: c/t
     footer: "[AutoDiff with odin (ODE systems)](https://www.imperial.ac.uk/people/m.baguelin)"
+bibliography: papers_autodiff.bib
 ---
 
-# Principles
+
+# Principles {background-color="#153E70"}
+
+::: footer
+:::
 
 ## General {.smaller}
 
@@ -28,15 +33,19 @@ $$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z
 :::
 
 ::: {.column width="50%"}
-[Chen et al. "Neural Ordinary Differential Equations", *NeurIPS 2018*](https://proceedings.neurips.cc/paper_files/paper/2018/file/69386f6bb1dfed68692a24c8686939b9-Paper.pdf)
+Figure from @Chen2018
 :::
 
 ::::
 
-## Thoughts on the general case & Jacobian-vector product
+## Jacobian-vector products
 
-- General case is $$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$$
-- RHS is the Jacobian-Vector product (jvp)
+@AndreasGriewank2008
+
+- $a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$ and $a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}$ are **Jacobian-Vector product** (JVP)
+- Concise mathematical notation
+- Reveal similarities between continuous and discrete algorithms
+- In practice computed using the computation graph of the model
 
 ## Comparison with "discrete" AD {.smaller}
 
@@ -49,8 +58,7 @@ very similar algorithm
 * Step 5: add the contribution of initial conditions to adjoint of parameters
 * Step 6: read gradient
 
-
-# Worked example: logistic function
+# Worked example: logistic function {background-color="#153E70"}
 
 ## About the logistic (growth) function
 
@@ -138,10 +146,14 @@ n_obs <- 20
 t_obs <- seq(1, n_obs)
 
 #Plot the trajectory
+bg_color <- "#fffdf1"
+par(bg = bg_color)
 tt <- seq(0, 25, length.out = 101)
 y <- mod$simulate(tt)[,1,]
 plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=1)
 ```
+
+Generated with $N(0) =$ `r N0`, $K =$ `r K`, $r =$ `r r`
 
 ## Logistic function plot + observations {visibility="uncounted"}
 
@@ -160,6 +172,7 @@ N_obs <- K/(1+exp(-r*(t_obs-t0)))
 sd_noise <- 5
 d_df <- data.frame(time = t_obs,
                    observed = rnorm(N_obs,N_obs, sd_noise))
+par(bg = bg_color)
 plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=3)
 points(t_obs, N_obs, pch=19, col="grey")
 points(t_obs, d_df$observed, pch=19, col="black")
@@ -167,6 +180,10 @@ for(i in seq_along(t_obs)){
   lines(c(t_obs[i],t_obs[i]), c(N_obs[i],d_df$observed[i]))
 }
 ```
+
+Generated with $N(0) =$ `r N0`, $K =$ `r K`, $r =$ `r r` and $\sigma =$ `r sd_noise`
+
+# Analytical derivation {background-color="#153E70"}
 
 ## Analytical gradient (1) {.smaller}
 
@@ -270,6 +287,8 @@ gradient_analytical
 
 Note that the trick only worked because we had an exact solution of the ode!
 
+# Automatic differentiation {background-image="images/background_h1.jpeg"}
+
 ## Building the dependency graph
 
 First let's build the graph of dependencies in the main odin model
@@ -298,13 +317,15 @@ param_graph <- construct_param_tree(parsed_model)
 igraph::print_all(param_graph)
 ```
 
-## Autodiff gradient (1)
+## General idea
 
-**Idea:** After a pass forward, we are looping through the observation points backward in time going from one state to the other using a system of ODEs containing:
+After a pass forward, we need to through the observation points backward in time going from one state to the other using a system of ODEs containing:
 
 (1) the states;
 (2) the ajoints of the states;
 (3) the adjoints of parameters (apart from compare or initial conditions ones)
+
+![](images/ode_AD_chen.png){.absolute top=480 left=500 width="489" height="338"}
 
 ## Forward pass
 
@@ -370,8 +391,11 @@ $\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}
 **Logistic growth example**
 
 $\frac{da_{N}(t)}{dt}=-a_{N}(t) \frac{d \left [ rN \left ( 1- \frac{N}{K}\right ) \right ]}{d N}$ 
+
 :::
+
 ::::
+
 - Only one state variable $N$
 - We compute the partial derivative of the RHS of deriv_N wrt to $N$
 ```{r}
@@ -387,22 +411,102 @@ initial(adj_N) <- adj_N_end
 ```
 - If we had more states, we would look at which other states the RHS depend on
 
-## Adjoint parameters equations
+## Adjoint parameters equations {.smaller}
 
+- Parameter "continuous" accumulation as integration
 
+:::: {.columns}
 
-## Compiling the reverse-with-adjoints model
+::: {.column width="50%"}
+
+**Integral form**
+
+$\frac{dL}{d \theta} = \int_{t_{1}}^{t_{0}} a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}dt$
+
+:::
+
+::: {.column width="50%"}
+
+**ODE**
+
+$\frac{da_{\theta}(t)}{dt}= a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}$ 
+:::
+
+::::
+
+```{r}
+#| echo: TRUE
+ff <- parse(text="r * N * (1 - N / K)")
+D(ff, "r")
+```
+
+```{r}
+#| echo: TRUE
+ff <- parse(text="r * N * (1 - N / K)")
+D(ff, "K")
+```
+
+- Resulting code
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(adj_K) <- -adj_N * r * (N/K)^2
+deriv(adj_r) <- -adj_N * N * (1 - N/K)
+initial(adj_K) <- adj_K_end
+initial(adj_r) <- adj_r_end
+```
+
+## odin code for "reverse" model
+
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(N) <- r * N * (N / K - 1)
+deriv(adj_N) <- adj_N * r * (1- 2*N/K)
+deriv(adj_K) <- -adj_N * r * (N/K)^2
+deriv(adj_r) <- -adj_N * N * (1 - N/K)
+deriv(t_model) <- -1
+
+initial(N) <- N_end
+initial(t_model) <- t_end
+initial(adj_N) <- adj_N_end
+initial(adj_K) <- adj_K_end
+initial(adj_r) <- adj_r_end
+
+N_end <- user(1)
+K <- user(100)
+r <- user()
+t_end <- user()
+adj_N_end <- user()
+adj_K_end <- user()
+adj_r_end <- user()
+```
+
+## Compiling the "reverse" model
 
 ```{r compile-reverse-with-adjoints}
 #| echo: TRUE
 generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
 ```
 
+## Looping through observations
+
+- R code to loop from final observation through observation until initial time
+```{r, eval=FALSE}
+#| echo: TRUE
+for(i in seq_along(t_obs)){
+  y_curr <- d_df$observed[n_obs-i+1]
+  
+  ##############
+  #            #
+  ##############
+
+}
+```
+  
 ## Initialising the states and adjoints
 
 - States initialised to last observation value
 - Adjoints initialised to 0
-```{r, reverse-initialisation}
+```{r reverse-initialisation}
 #| echo: TRUE
 N_curr <- N_obs[last_obs]
 t_curr <- t_obs[last_obs]
@@ -485,6 +589,8 @@ Which gives
 gradient_AD
 ```
 
+# Wrapping up {background-color="#153E70"}
+
 ## Numerical differentiation gradient
 
 ```{r numerical differentiation}
@@ -520,6 +626,8 @@ knitr::kable(data.frame(Variable = name_var,
 ```
 
 ## Running Gradient descent
+
+## References
 
 
 <!--  LocalWords:  revealjs sprintf writeLines readLines 
