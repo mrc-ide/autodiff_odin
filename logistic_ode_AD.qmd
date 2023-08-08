@@ -9,7 +9,7 @@ bibliography: papers_autodiff.bib
 ---
 
 
-# Principles {background-color="#153E70"}
+# Principles {background-image="images/background_h1.jpeg"}
 
 ::: footer
 :::
@@ -58,7 +58,7 @@ very similar algorithm
 * Step 5: add the contribution of initial conditions to adjoint of parameters
 * Step 6: read gradient
 
-# Worked example: logistic function {background-color="#153E70"}
+# Worked example: logistic function {background-image="images/background_h1.jpeg"}
 
 ## About the logistic (growth) function
 
@@ -146,7 +146,7 @@ n_obs <- 20
 t_obs <- seq(1, n_obs)
 
 #Plot the trajectory
-bg_color <- "#fffdf1"
+bg_color <- "#ffffff"
 par(bg = bg_color)
 tt <- seq(0, 25, length.out = 101)
 y <- mod$simulate(tt)[,1,]
@@ -183,7 +183,7 @@ for(i in seq_along(t_obs)){
 
 Generated with $N(0) =$ `r N0`, $K =$ `r K`, $r =$ `r r` and $\sigma =$ `r sd_noise`
 
-# Analytical derivation {background-color="#153E70"}
+# Analytical derivation {background-image="images/background_h1.jpeg"}
 
 ## Analytical gradient (1) {.smaller}
 
@@ -289,43 +289,27 @@ Note that the trick only worked because we had an exact solution of the ode!
 
 # Automatic differentiation {background-image="images/background_h1.jpeg"}
 
-## Building the dependency graph
-
-First let's build the graph of dependencies in the main odin model
-
-```{r}
-#| echo: TRUE
-parsed_model <- jsonlite::fromJSON(odin::odin_parse("models/logistic_growth_normal_obs.R"))
-construct_param_tree <- function(parsed_model){
-  parameter_graph <- NULL
-  for(n in seq_along(parsed_model$equations$name)){
-    if(!is.null(parsed_model$equations$depends$variables[n][[1]])){
-      for(p in eval(parsed_model$equations$depends$variables[n][[1]]))
-        parameter_graph <- rbind(parameter_graph,
-                                 c(p,parsed_model$equations$name[n]))
-    }
-  }
-  igraph::graph_from_edgelist(parameter_graph)
-}
-param_graph <- construct_param_tree(parsed_model)
-```
-
-## Dependency graph
-
-```{r}
-#| echo: TRUE
-igraph::print_all(param_graph)
-```
+::: footer
+:::
 
 ## General idea
 
-After a pass forward, we need to through the observation points backward in time going from one state to the other using a system of ODEs containing:
+After a pass forward, we need to pass through the observation points backward in time going from one state to the other using a system of ODEs containing:
+
+:::: {.columns}
+
+::: {.column width="50%"}
 
 (1) the states;
 (2) the ajoints of the states;
-(3) the adjoints of parameters (apart from compare or initial conditions ones)
+(3) the adjoints of parameters (apart from compare or initial conditions ones) 
+:::
 
-![](images/ode_AD_chen.png){.absolute top=480 left=500 width="489" height="338"}
+::: {.column width="50%"}
+:::
+
+::::
+![](images/ode_AD_chen.png){.absolute top=260 left=520 width="489" height="338"}
 
 ## Forward pass
 
@@ -335,7 +319,7 @@ After a pass forward, we need to through the observation points backward in time
 #Run system until last observation
 last_obs <- length(t_obs)
 mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
-y_end <- mod$run(last_obs)
+y_end <- mod$run(t_obs[last_obs])
 ```
 
 ## Backward state equations {.smaller}
@@ -403,17 +387,45 @@ $\frac{da_{N}(t)}{dt}=-a_{N}(t) \frac{d \left [ rN \left ( 1- \frac{N}{K}\right 
 ff <- parse(text="r * N * (1 - N / K)")
 D(ff, "N")
 ```
-- Which results in the following adjoint state equation
+- Which results in the (simplified) following adjoint state equation
 ```{r, eval=FALSE}
 #| echo: TRUE
 deriv(adj_N) <- adj_N * r * (1- 2*N/K)
 initial(adj_N) <- adj_N_end
 ```
-- If we had more states, we would look at which other states the RHS depend on
+- If we had more states, we would look at which other states the RHS depend on using the dependency graph
+
+## Building the dependency graph
+
+Building the graph of dependencies of the main odin model is done the same way than for the discrete case
+
+```{r}
+#| echo: TRUE
+parsed_model <- jsonlite::fromJSON(odin::odin_parse("models/logistic_growth_normal_obs.R"))
+construct_param_tree <- function(parsed_model){
+  parameter_graph <- NULL
+  for(n in seq_along(parsed_model$equations$name)){
+    if(!is.null(parsed_model$equations$depends$variables[n][[1]])){
+      for(p in eval(parsed_model$equations$depends$variables[n][[1]]))
+        parameter_graph <- rbind(parameter_graph,
+                                 c(p,parsed_model$equations$name[n]))
+    }
+  }
+  igraph::graph_from_edgelist(parameter_graph)
+}
+param_graph <- construct_param_tree(parsed_model)
+```
+
+## Dependency graph
+
+```{r}
+#| echo: TRUE
+igraph::print_all(param_graph)
+```
 
 ## Adjoint parameters equations {.smaller}
 
-- Parameter "continuous" accumulation as integration
+- Integrative parameter accumulation  has to be adapted for the ODE solver:
 
 :::: {.columns}
 
@@ -427,9 +439,14 @@ $\frac{dL}{d \theta} = \int_{t_{1}}^{t_{0}} a(t)^{\intercal} \frac{\partial f(z(
 
 ::: {.column width="50%"}
 
-**ODE**
+**ODE form**
 
-$\frac{da_{\theta}(t)}{dt}= a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}$ 
+\begin{cases}
+\begin{align*}
+\frac{da_{\theta}(t)}{dt} &= a_{\theta}(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}\\
+a_{\theta}(0) &= a_{t_{1}}
+\end{align*}
+\end{cases}
 :::
 
 ::::
@@ -437,13 +454,13 @@ $\frac{da_{\theta}(t)}{dt}= a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\p
 ```{r}
 #| echo: TRUE
 ff <- parse(text="r * N * (1 - N / K)")
-D(ff, "r")
+D(ff, "K")
 ```
 
 ```{r}
 #| echo: TRUE
 ff <- parse(text="r * N * (1 - N / K)")
-D(ff, "K")
+D(ff, "r")
 ```
 
 - Resulting code
@@ -524,7 +541,7 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
                                      time=0, n_particles = 1)
 ```
 
-## Two functions giving the contributions of the data
+## Contributions of observations
 
 - Flowing to state adj_N
 ```{r}
@@ -570,7 +587,7 @@ for(i in seq_along(t_obs)){
 }
 ```
 
-## Autodiff gradient (3)
+## Autodiff gradient results
 
 Saving the end result
 ```{r}
@@ -589,7 +606,7 @@ Which gives
 gradient_AD
 ```
 
-# Wrapping up {background-color="#153E70"}
+# Wrapping up {background-image="images/background_h1.jpeg"}
 
 ## Numerical differentiation gradient
 
@@ -624,8 +641,6 @@ knitr::kable(data.frame(Variable = name_var,
                         analytical = unlist(gradient_analytical),
                         ND = gradient_ND))
 ```
-
-## Running Gradient descent
 
 ## References
 
