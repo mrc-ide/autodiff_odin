@@ -61,3 +61,6 @@ animation/
 
 # specific mac files
 .DS_Store
+
+# Quarto extensions
+_extensions/
