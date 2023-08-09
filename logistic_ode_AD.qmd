@@ -11,9 +11,6 @@ bibliography: papers_autodiff.bib
 
 # Principles {background-image="images/background_h1.jpeg"}
 
-::: footer
-:::
-
 ## General {.smaller}
 
 ![](images/ode_AD_chen.png){.absolute top=180 left=500 width="652" height="450"}
@@ -322,7 +319,7 @@ mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
 y_end <- mod$run(t_obs[last_obs])
 ```
 
-## Backward state equations {.smaller}
+## Running backwards {.smaller}
 
 - We then need to run backward the state equations
 - Running backward in time = change of variable $\rightarrow s = t_{end}-t$
@@ -387,17 +384,19 @@ $\frac{da_{N}(t)}{dt}=-a_{N}(t) \frac{d \left [ rN \left ( 1- \frac{N}{K}\right 
 ff <- parse(text="r * N * (1 - N / K)")
 D(ff, "N")
 ```
-- Which results in the (simplified) following adjoint state equation
+- Remember that we need to "reverse" time in the  equation. This results in the (simplified) following adjoint state equation
 ```{r, eval=FALSE}
 #| echo: TRUE
 deriv(adj_N) <- adj_N * r * (1- 2*N/K)
 initial(adj_N) <- adj_N_end
 ```
-- If we had more states, we would look at which other states the RHS depend on using the dependency graph
+
 
 ## Building the dependency graph
 
-Building the graph of dependencies of the main odin model is done the same way than for the discrete case
+- Here dim(state)=1, if >1 we would look at which other states the RHS depend on using the dependency graph
+
+- Building the graph of dependencies of the main odin model can be done the same way than for the discrete case
 
 ```{r}
 #| echo: TRUE
@@ -463,7 +462,7 @@ ff <- parse(text="r * N * (1 - N / K)")
 D(ff, "r")
 ```
 
-- Resulting code
+- Resulting code (including reversing)
 ```{r, eval=FALSE}
 #| echo: TRUE
 deriv(adj_K) <- -adj_N * r * (N/K)^2
@@ -586,6 +585,10 @@ for(i in seq_along(t_obs)){
   adj_r_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_r]
 }
 ```
+
+## Propagating initial conditions
+
+- The same way than for the discrete case, IC need to be propagated in the adjoints
 
 ## Autodiff gradient results
 
