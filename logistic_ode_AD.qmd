@@ -2,7 +2,7 @@
 title: "`AutoDiff, ODEs and odin`"
 author: "Marc Baguelin"
 format:
-  tickle_ext-revealjs:
+  revealjs:
     slide-number: c/t
     footer: "[AutoDiff with odin (ODE systems)](https://www.imperial.ac.uk/people/m.baguelin)"
 bibliography: papers_autodiff.bib
@@ -275,7 +275,7 @@ likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
 
 ## Analytical gradient results
 
-We then get (painfully) the gradient of the log-likelihood of our model:
+We then get the gradient of our model log-likelihood
 ```{r}
 #| echo: TRUE
 gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed[-1], t_obs) #first element of d_df is t=0 and observed=NA 
@@ -356,7 +356,7 @@ initial(N) <- N_end
 
 ## Adjoint state equations {.smaller}
 
-- At the same time, we run the adjoint state equations
+- At the same time, we run the adjoint state equations using:
 
 :::: {.columns}
 
@@ -387,7 +387,7 @@ D(ff, "N")
 - Remember that we need to "reverse" time in the  equation. This results in the (simplified) following adjoint state equation
 ```{r, eval=FALSE}
 #| echo: TRUE
-deriv(adj_N) <- adj_N * r * (1- 2*N/K)
+deriv(adj_N) <- adj_N * r * (1- 2 * N/K)
 initial(adj_N) <- adj_N_end
 ```
 
@@ -395,8 +395,6 @@ initial(adj_N) <- adj_N_end
 ## Building the dependency graph
 
 - Here dim(state)=1, if >1 we would look at which other states the RHS depend on using the dependency graph
-
-- Building the graph of dependencies of the main odin model can be done the same way than for the discrete case
 
 ```{r}
 #| echo: TRUE
@@ -422,7 +420,7 @@ param_graph <- construct_param_tree(parsed_model)
 igraph::print_all(param_graph)
 ```
 
-## Adjoint parameters equations {.smaller}
+## Adjoint parameters equations (1) {.smaller}
 
 - Integrative parameter accumulation  has to be adapted for the ODE solver:
 
@@ -437,12 +435,10 @@ $\frac{dL}{d \theta} = \int_{t_{1}}^{t_{0}} a(t)^{\intercal} \frac{\partial f(z(
 :::
 
 ::: {.column width="50%"}
-
 **ODE form**
-
 \begin{cases}
 \begin{align*}
-\frac{da_{\theta}(t)}{dt} &= a_{\theta}(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}\\
+\frac{da_{\theta}(t)}{dt} &= a_{N}(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}\\
 a_{\theta}(0) &= a_{t_{1}}
 \end{align*}
 \end{cases}
@@ -450,6 +446,7 @@ a_{\theta}(0) &= a_{t_{1}}
 
 ::::
 
+- We need to compute $\frac{\partial f(z(t),t,\theta)}{\partial \theta}$ for each parameter 
 ```{r}
 #| echo: TRUE
 ff <- parse(text="r * N * (1 - N / K)")
@@ -462,7 +459,9 @@ ff <- parse(text="r * N * (1 - N / K)")
 D(ff, "r")
 ```
 
-- Resulting code (including reversing)
+## Adjoint parameters equations (2) {.smaller}
+
+- Resulting code
 ```{r, eval=FALSE}
 #| echo: TRUE
 deriv(adj_K) <- -adj_N * r * (N/K)^2
@@ -471,12 +470,16 @@ initial(adj_K) <- adj_K_end
 initial(adj_r) <- adj_r_end
 ```
 
+- Note that we do not need to reverse time here, the accumulation is already accounting for the reverse time-path in the boundary values of the integral $\int_{t_{1}}^{t_{0}} a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}dt$
+
+- Again, if dim(state) was >1 we would have need to use the dependency graph to compute the JVP
+
 ## odin code for "reverse" model
 
 ```{r, eval=FALSE}
 #| echo: TRUE
 deriv(N) <- r * N * (N / K - 1)
-deriv(adj_N) <- adj_N * r * (1- 2*N/K)
+deriv(adj_N) <- adj_N * r * (1- 2 * N/K)
 deriv(adj_K) <- -adj_N * r * (N/K)^2
 deriv(adj_r) <- -adj_N * N * (1 - N/K)
 deriv(t_model) <- -1
@@ -503,22 +506,32 @@ adj_r_end <- user()
 generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
 ```
 
-## Looping through observations
+## Structure of the reverse pass {.smaller}
 
-- R code to loop from final observation through observation until initial time
+Now that we have the reverse odin ODE model in place we need to write the R code looping through the observations
 ```{r, eval=FALSE}
 #| echo: TRUE
+################################
+#  Initialisation block        #
+################################
+
+#Looping backwards through observations
 for(i in seq_along(t_obs)){
   y_curr <- d_df$observed[n_obs-i+1]
   
-  ##############
-  #            #
-  ##############
-
+  ################################
+  #  Contributions of data       #
+  ################################
+  #  Reverse ODE integration     #
+  ################################
 }
+
+############################################
+#  Contributions of initial conditions     #
+############################################
 ```
   
-## Initialising the states and adjoints
+## Initialising block
 
 - States initialised to last observation value
 - Adjoints initialised to 0
@@ -540,22 +553,65 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
                                      time=0, n_particles = 1)
 ```
 
-## Contributions of observations
+## Contributions of observations {.smaller}
 
-- Flowing to state adj_N
+- PDF of observations: $\log (f) = -\log \sigma - \frac{1}{2} \log (2\pi) - \frac{1}{2 \sigma^2} ( N^{obs}-N )^2$
+- Contribution to state adj_N at observation point
+
+:::: {.columns}
+
+::: {.column width="50%"}
+**Partial derivative**
+```{r}
+#| echo: TRUE
+ff <- parse(text="-log(sigma) - 0.5 * log (2 * pi) -0.5/sigma^2 * (N_observed - N)^2")
+D(ff, "N")
+```
+:::
+
+::: {.column width="50%"}
+**R function**
 ```{r}
 #| echo: TRUE
 contribution_data_adjoint <- function(observed, model, sd){
   (observed-model)/sd^2
 }
 ```
+:::
+::::
 
-- Flowing to observation parameter $\sigma$
+- Contribution to parameter $\sigma$ at observation point............................................     
+
+:::: {.columns}
+
+::: {.column width="50%"}
+**Partial derivative**
+```{r}
+#| echo: TRUE
+ff <- parse(text="-log(sigma) - 0.5 * log (2 * pi) -0.5/sigma^2 * (N_observed - N)^2")
+D(ff, "sigma")
+```
+:::
+
+::: {.column width="50%"}
+**R function**
 ```{r}
 #| echo: TRUE
 contribution_data_sigma <- function(observed, model, sd){
   -1/sd + (observed-model)^2/sd^3
 }
+```
+:::
+::::
+
+## Propagating initial conditions
+
+- The same way than for the discrete case, IC need to be propagated in the adjoints
+- However here we have $N(0) = N_{0}$ so $a_{N_{0}}=\frac{\partial \log(L)} {\partial N_{0}}=\frac{\partial \log(L)} {\partial N(0)}=a_{N(0)}$
+```{r}
+#| echo: TRUE
+ff <- parse(text="N0")
+D(ff, "N0")
 ```
 
 ## Looping through observations
@@ -585,10 +641,6 @@ for(i in seq_along(t_obs)){
   adj_r_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_r]
 }
 ```
-
-## Propagating initial conditions
-
-- The same way than for the discrete case, IC need to be propagated in the adjoints
 
 ## Autodiff gradient results
 

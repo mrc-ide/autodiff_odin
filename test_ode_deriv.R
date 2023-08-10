@@ -29,8 +29,8 @@ t0 <- log(K/N0-1)/r
 
 #generates noisy observations/data
 N_obs <- K/(1+exp(-r*(t_obs-t0)))
-d_df <- data.frame(time = c(0,t_obs),
-                   observed = c(NA,rnorm(n_obs,N_obs, sd_noise)))
+d_df <- data.frame(time = t_obs,
+                   observed = rnorm(n_obs,N_obs, sd_noise))
 
 last_obs <- length(t_obs)
 mod$initialize(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
@@ -57,7 +57,7 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
 
 # Loop through observations
 for(i in seq_along(t_obs)){
-  y_curr <- d_df$observed[n_obs - i + 2] #this is +2 rather than +1 because we have added an NA "observation" at t=0
+  y_curr <- d_df$observed[n_obs - i + 1]
   adj_N_curr <- adj_N_curr + contribution_data_adjoint(y_curr, N_curr, sd_noise)
   adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(y_curr, N_curr, sd_noise)
 
