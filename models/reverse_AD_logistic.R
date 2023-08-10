@@ -1,7 +1,7 @@
 deriv(N) <- r * N * (N / K - 1)
 deriv(adj_N) <- adj_N * r * (1- 2*N/K)
-deriv(adj_K) <- -adj_N * r * (N/K)^2
-deriv(adj_r) <- -adj_N * N * (1 - N/K)
+deriv(adj_K) <- adj_N * r * (N/K)^2
+deriv(adj_r) <- adj_N * N * (1 - N/K)
 deriv(t_model) <- -1
 
 initial(N) <- N_end

@@ -1,26 +1,7 @@
 # R code for the "AutoDiff, ODEs and odin" presentation
 
 # Libraries
-library(jsonlite)
-library(igraph)
 library(odin.dust)
-
-# Parsing the odin model
-parsed_model <- jsonlite::fromJSON(odin::odin_parse("models/logistic_growth_normal_obs.R"))
-
-# Construct parameter dependency graph
-construct_param_tree <- function(parsed_model){
-  parameter_graph <- NULL
-  for(n in seq_along(parsed_model$equations$name)){
-    if(!is.null(parsed_model$equations$depends$variables[n][[1]])){
-      for(p in eval(parsed_model$equations$depends$variables[n][[1]]))
-        parameter_graph <- rbind(parameter_graph,
-                                 c(p,parsed_model$equations$name[n]))
-    }
-  }
-  igraph::graph_from_edgelist(parameter_graph)
-}
-param_graph <- construct_param_tree(parsed_model)
 
 # Contributing functions
 contribution_data_adjoint <- function(observed, model, sd){
@@ -35,11 +16,12 @@ contribution_data_sigma <- function(observed, model, sd){
 N0 <- 2
 K <- 100
 r <- 1
+sd_noise <- 5
 
 generator <- odin.dust::odin_dust("models/logistic_growth_normal_obs.R")
 mod <- generator$new(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
 
-n_obs <- 20
+n_obs <- 1
 t_obs <- seq(1, n_obs)
 
 #computes the mid-point time (t0 such that N(t0)=K/2)
@@ -47,12 +29,11 @@ t0 <- log(K/N0-1)/r
 
 #generates noisy observations/data
 N_obs <- K/(1+exp(-r*(t_obs-t0)))
-sd_noise <- 5
-d_df <- data.frame(time = t_obs,
-                   observed = rnorm(N_obs,N_obs, sd_noise))
+d_df <- data.frame(time = c(0,t_obs),
+                   observed = c(NA,rnorm(n_obs,N_obs, sd_noise)))
 
 last_obs <- length(t_obs)
-mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
+mod$initialize(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
 y_end <- mod$run(t_obs[last_obs])
 
 # Compile the reverse model
@@ -76,9 +57,9 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
 
 # Loop through observations
 for(i in seq_along(t_obs)){
-  y_curr <- d_df$observed[n_obs - i + 1]
-  adj_N_curr <- adj_N_curr + contribution_data_adjoint(N_curr, y_curr, sd_noise)
-  adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(N_curr, y_curr, sd_noise)
+  y_curr <- d_df$observed[n_obs - i + 2] #this is +2 rather than +1 because we have added an NA "observation" at t=0
+  adj_N_curr <- adj_N_curr + contribution_data_adjoint(y_curr, N_curr, sd_noise)
+  adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(y_curr, N_curr, sd_noise)
 
   reverse_mod$initialize(pars= list(r=1,
                                     N_end=N_curr,
@@ -119,12 +100,13 @@ pf_data <- mcstate::particle_filter_data(d_df, "t", rate=NULL, initial_time = 0)
 #creating the filter
 filter <- mcstate::particle_filter$new(data=pf_data, generator, n_particles = 1, compare = NULL)
 h <- 1e-6
-ND_sigma <- (filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5+h))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
-ND_N <- (filter$run(pars=list(r=r, N0=N0+h, K=K, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
-ND_K <- (filter$run(pars=list(r=r, N0=N0, K=K+h, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
-ND_r <- (filter$run(pars=list(r=r+h, N0=N0, K=K, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
+ND_sigma <- (filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise+h))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_N <- (filter$run(pars=list(r=r, N0=N0+h, K=K, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_K <- (filter$run(pars=list(r=r, N0=N0, K=K+h, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_r <- (filter$run(pars=list(r=r+h, N0=N0, K=K, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
 
 gradient_ND <- c(ND_sigma,ND_N,ND_K,ND_r)
 
 gradient_AD
 gradient_ND
+

@@ -136,6 +136,7 @@ generator <- odin.dust::odin_dust("models/logistic_growth_normal_obs.R")
 N0 <- 2
 K <- 100
 r <- 1
+sd_noise <- 5
 
 mod <- generator$new(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
 
@@ -166,15 +167,14 @@ N_obs <- K/(1+exp(-r*(t_obs-t0)))
 #points(t_obs, N_obs)
 
 #generates noisy observations/data
-sd_noise <- 5
-d_df <- data.frame(time = t_obs,
-                   observed = rnorm(N_obs,N_obs, sd_noise))
+d_df <- data.frame(time = c(0,t_obs),
+                   observed = c(NA,rnorm(n_obs,N_obs, sd_noise)))
 par(bg = bg_color)
 plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=3)
 points(t_obs, N_obs, pch=19, col="grey")
-points(t_obs, d_df$observed, pch=19, col="black")
+points(t_obs, d_df$observed[-1], pch=19, col="black") #first element of d_df is t=0 and observed=NA 
 for(i in seq_along(t_obs)){
-  lines(c(t_obs[i],t_obs[i]), c(N_obs[i],d_df$observed[i]))
+  lines(c(t_obs[i],t_obs[i]), c(N_obs[i],d_df$observed[i+1])) #first element of d_df is t=0 and observed=NA 
 }
 ```
 
@@ -278,7 +278,7 @@ likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
 We then get (painfully) the gradient of the log-likelihood of our model:
 ```{r}
 #| echo: TRUE
-gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed, t_obs)
+gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed[-1], t_obs) #first element of d_df is t=0 and observed=NA 
 gradient_analytical
 ```
 
@@ -315,7 +315,7 @@ After a pass forward, we need to pass through the observation points backward in
 #| echo: TRUE
 #Run system until last observation
 last_obs <- length(t_obs)
-mod$initialize(pars=list(r=1, sd_noise=5), time = 0, n_particles = 1)
+mod$initialize(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
 y_end <- mod$run(t_obs[last_obs])
 ```
 
@@ -563,9 +563,9 @@ contribution_data_sigma <- function(observed, model, sd){
 ```{r looping-ode-reverse-through-observations}
 #| echo: TRUE
 for(i in seq_along(t_obs)){
-  y_curr <- d_df$observed[n_obs-i+1]
-  adj_N_curr <- adj_N_curr + contribution_data_adjoint(N_curr, y_curr, sd_noise)
-  adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(N_curr, y_curr, sd_noise)
+  y_curr <- d_df$observed[n_obs - i + 2] #this is +2 rather than +1 because we have added an NA "observation" at t=0
+  adj_N_curr <- adj_N_curr + contribution_data_adjoint(y_curr, N_curr, sd_noise)
+  adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(y_curr, N_curr, sd_noise)
   reverse_mod$initialize(pars= list(r=1,
                                     N_end=N_curr,
                                     t_end=t_curr,
@@ -627,10 +627,10 @@ pf_data <- mcstate::particle_filter_data(d_df, "t", rate=NULL, initial_time = 0)
 #creating the filter
 filter <- mcstate::particle_filter$new(data=pf_data, generator, n_particles = 1, compare = NULL)
 h <- 1e-6
-ND_sigma <- (filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5+h))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
-ND_N <- (filter$run(pars=list(r=r, N0=N0+h, K=K, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
-ND_K <- (filter$run(pars=list(r=r, N0=N0, K=K+h, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
-ND_r <- (filter$run(pars=list(r=r+h, N0=N0, K=K, sd_noise=5))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=5)))/h
+ND_sigma <- (filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise+h))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_N <- (filter$run(pars=list(r=r, N0=N0+h, K=K, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_K <- (filter$run(pars=list(r=r, N0=N0, K=K+h, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_r <- (filter$run(pars=list(r=r+h, N0=N0, K=K, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
 
 gradient_ND <- c(ND_sigma,ND_N,ND_K,ND_r)
 gradient_ND
