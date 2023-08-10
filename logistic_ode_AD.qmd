@@ -167,14 +167,14 @@ N_obs <- K/(1+exp(-r*(t_obs-t0)))
 #points(t_obs, N_obs)
 
 #generates noisy observations/data
-d_df <- data.frame(time = c(0,t_obs),
-                   observed = c(NA,rnorm(n_obs,N_obs, sd_noise)))
+d_df <- data.frame(time = t_obs,
+                   observed = rnorm(n_obs,N_obs, sd_noise))
 par(bg = bg_color)
 plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=3)
 points(t_obs, N_obs, pch=19, col="grey")
-points(t_obs, d_df$observed[-1], pch=19, col="black") #first element of d_df is t=0 and observed=NA 
+points(t_obs, d_df$observed, pch=19, col="black") 
 for(i in seq_along(t_obs)){
-  lines(c(t_obs[i],t_obs[i]), c(N_obs[i],d_df$observed[i+1])) #first element of d_df is t=0 and observed=NA 
+  lines(c(t_obs[i],t_obs[i]), c(N_obs[i],d_df$observed[i]))
 }
 ```
 
@@ -278,7 +278,7 @@ likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
 We then get the gradient of our model log-likelihood
 ```{r}
 #| echo: TRUE
-gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed[-1], t_obs) #first element of d_df is t=0 and observed=NA 
+gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed, t_obs)
 gradient_analytical
 ```
 
@@ -619,7 +619,7 @@ D(ff, "N0")
 ```{r looping-ode-reverse-through-observations}
 #| echo: TRUE
 for(i in seq_along(t_obs)){
-  y_curr <- d_df$observed[n_obs - i + 2] #this is +2 rather than +1 because we have added an NA "observation" at t=0
+  y_curr <- d_df$observed[n_obs - i + 1]
   adj_N_curr <- adj_N_curr + contribution_data_adjoint(y_curr, N_curr, sd_noise)
   adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(y_curr, N_curr, sd_noise)
   reverse_mod$initialize(pars= list(r=1,
