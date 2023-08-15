@@ -55,3 +55,15 @@ vignettes/*.pdf
 
 #files produced for html presentation cache
 *_files/
+
+# files for animation
+animation/
+
+# animation files
+*.mp4
+
+# specific mac files
+.DS_Store
+
+# Quarto extensions
+_extensions/

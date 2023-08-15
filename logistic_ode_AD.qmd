@@ -1,0 +1,704 @@
+---
+title: "`AutoDiff, ODEs and odin`"
+author: "Marc Baguelin"
+format:
+  revealjs:
+    slide-number: c/t
+    footer: "[AutoDiff with odin (ODE systems)](https://www.imperial.ac.uk/people/m.baguelin)"
+bibliography: papers_autodiff.bib
+---
+
+
+# Principles {background-image="images/background_h1.jpeg"}
+
+## General {.smaller}
+
+![](images/ode_AD_chen.png){.absolute top=180 left=500 width="652" height="450"}
+
+:::: {.columns}
+
+::: {.column width="30%"}
+
+- Adjoints
+$$a(t) = \frac{\partial L}{\partial z(t)}$$
+- "Continuous" chain rule
+$$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$$ 
+- Parameter "continuous" accumulation $$\frac{dL}{d \theta} = \int_{t_{1}}^{t_{0}} a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}dt$$  
+:::
+
+::: {.column width="20%"}
+:::
+
+::: {.column width="50%"}
+Figure from @Chen2018
+:::
+
+::::
+
+## Jacobian-vector products
+
+@AndreasGriewank2008
+
+- $a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$ and $a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}$ are **Jacobian-Vector product** (JVP)
+- Concise mathematical notation
+- Reveal similarities between continuous and discrete algorithms
+- In practice computed using the computation graph of the model
+
+## Comparison with "discrete" AD {.smaller}
+
+very similar algorithm
+
+* Step 1: run the system forward until the last data point
+* Step 2: compute the contribution of data point to adjoints
+* Step 3: compute the backward system (including state, adjoint state and adjoint parameters) until previous data point or initial time
+* Step 4: if not initial time go to step 2, if initial go to step 5
+* Step 5: add the contribution of initial conditions to adjoint of parameters
+* Step 6: read gradient
+
+# Worked example: logistic function {background-image="images/background_h1.jpeg"}
+
+## About the logistic (growth) function
+
+- Simple population growth model with saturation
+- 1-D ODE
+- Three parameters 
+- Known analytical solution
+- Non-linear
+
+![](images/Pierre_Francois_Verhulst.jpeg){.absolute top=250 left=800 width="120" height="181"}
+
+## ODE form {.smaller}
+
+The ODE form of the logistic function is:
+
+$$
+\begin{cases}
+\begin{align*}
+\frac{dN}{dt} &= rN\left(1 - \frac{N}{K}\right) \\
+N(0) &= N_{0}
+\end{align*}
+\end{cases}
+$$
+
+where:
+
+- $K$ is the carrying capacity or maximum value the function can reach
+- $r$ is the growth rate or steepness of the curve
+- $N_{0}$ is the initial condition of the ODE 
+
+## Equation form and observation model
+
+- The equation form of the logistic function is given by:
+$$N(t) = \frac{K}{1 + \left ( \frac{K}{N_{0}}-1 \right ) e^{-rt}}$$
+- We can also add an observation model
+$$N^{obs}_{t} \sim \mathcal{N}(N(t), \sigma),\; t \in T_{obs}=\{ t_{1},...,t_{n_{obs}} \}$$
+
+## odin model
+
+very compact and easy to read
+```{r}
+r_output <- function(path, highlight = NULL) {
+  if (is.null(highlight)) {
+    prefix <- "```r"
+  } else {
+    prefix <- sprintf('```{.r code-line-numbers="%s"}', highlight)
+  }
+  writeLines(c(prefix, readLines(path), "```"))
+}
+set.seed(1) # always the same
+knitr::knit_hooks$set(small_margins = function(before, options, envir) {
+  if (before) {
+    par(mar = c(4, 4, .1, .1))
+  }
+})
+```
+
+```{r odin-code-logistic-with-observations}
+#| results: "asis"
+r_output("models/logistic_growth_normal_obs.R")
+```
+
+The model (including noisy observation) has 4 parameters $r$, $K$, $N_{0}$ and $\sigma$ the s.d. of the observation process
+
+## Logistic function plot
+
+We can use odin.dust to integrate the ODE:
+
+```{r}
+#| echo: TRUE
+generator <- odin.dust::odin_dust("models/logistic_growth_normal_obs.R")
+```
+
+## Logistic function plot
+
+```{r}
+#default parameters
+N0 <- 2
+K <- 100
+r <- 1
+sd_noise <- 5
+
+mod <- generator$new(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
+
+n_obs <- 20
+t_obs <- seq(1, n_obs)
+
+#Plot the trajectory
+bg_color <- "#ffffff"
+par(bg = bg_color)
+tt <- seq(0, 25, length.out = 101)
+y <- mod$simulate(tt)[,1,]
+plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=1)
+```
+
+Generated with $N(0) =$ `r N0`, $K =$ `r K`, $r =$ `r r`
+
+## Logistic function plot + observations {visibility="uncounted"}
+
+```{r plot-observations}
+n_obs <- 20
+t_obs <- seq(1, n_obs)
+
+#computes the mid-point time (t0 such that N(t0)=K/2)
+t0 <- log(K/N0-1)/r
+
+#plot the analytical solution of the plotted model
+N_obs <- K/(1+exp(-r*(t_obs-t0)))
+#points(t_obs, N_obs)
+
+#generates noisy observations/data
+d_df <- data.frame(time = t_obs,
+                   observed = rnorm(n_obs,N_obs, sd_noise))
+par(bg = bg_color)
+plot(tt, y, xlab = "t", ylab = "N(t)", main = "", type="l", ylim= c(0,120), lty=3)
+points(t_obs, N_obs, pch=19, col="grey")
+points(t_obs, d_df$observed, pch=19, col="black") 
+for(i in seq_along(t_obs)){
+  lines(c(t_obs[i],t_obs[i]), c(N_obs[i],d_df$observed[i]))
+}
+```
+
+Generated with $N(0) =$ `r N0`, $K =$ `r K`, $r =$ `r r` and $\sigma =$ `r sd_noise`
+
+# Analytical derivation {background-image="images/background_h1.jpeg"}
+
+## Analytical gradient (1) {.smaller}
+
+The log-likelihood of the model is:
+$$\log(L) = \sum_{t \in T_{obs}} \log \left( f(N^{obs}_{t}, N(t), \sigma ) \right )$$
+with
+
+- $N^{obs}_{t},t \in T_{obs}$ the observations
+- $f$ the pdf of the Normal distribution
+
+$\frac{\partial \log(L)}{\partial \sigma}$ can be calculated relatively easily and 
+for partial derivatives wrt parameter $X \in \{ r,K,N_{0} \}$, we can use:
+$$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{\partial \log (f)}{\partial N} \bigg|_{N^{obs}_{t},N(t), \sigma} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0},t}$$
+
+## Analytical gradient (2) {.smaller}
+
+The log of the normal pdf is
+$$ \log (f) = -\log \sigma - \frac{1}{2} \log (2\pi) - \frac{1}{2 \sigma^2} ( N^{obs}-N )^2$$
+So we have
+
+$$\frac{\partial \log(L)} {\partial \sigma} = \sum_{t \in T_{obs}} \left ( -\frac{1}{\sigma} +\frac{1}{\sigma^3}(N^{obs}_{t}-N)^2 \right ) $$
+
+and we also get 
+$$\frac{\partial \log (f)}{\partial N} \bigg|_{N(t), \sigma} = \frac{N^{obs}-N}{\sigma^2}$$ 
+
+## Analytical gradient (3) {.smaller}
+
+So for $X \in \{ r,K,N_{0} \}$ we get
+$$\frac{\partial \log(L)}{\partial X} = \sum_{t \in T_{obs}} \frac{N^{obs}_{t}-N}{\sigma^2} \frac{\partial N}{\partial X} \bigg|_{r,K,N_{0},t}$$
+
+To which we need to plug the partial derivatives with respect to $r$, $K$, $N_{0}$
+
+$$
+\begin{cases}
+\begin{align*}
+\frac{{\partial N(t)}}{{\partial r}} & = \frac{{K \cdot t \cdot (K - N_0) \cdot e^{-rt}}}{{N_0 \cdot \left(1 + \left ( \frac{K}{N_{0}}-1 \right ) \cdot e^{-rt}\right)^2}} \\
+\frac{{\partial N(t)}}{{\partial K}}  & = \frac{1}{{\left(1 + \left ( \frac{K}{N_{0}}-1 \right ) \cdot e^{-rt}\right)^2}} \\
+\frac{{\partial N(t)}}{{\partial N_0}} & = \frac{{K^2 \cdot e^{-rt}}}{{N_0^2 \cdot \left(1 + \left(\frac{{K}}{{N_0}}-1\right) \cdot e^{-rt}\right)^2}}
+\end{align*}
+\end{cases}
+$$
+
+## We can write R code for these
+
+```{r}
+#| echo: TRUE
+# Gradient function with respect to K
+partial_derivative_K <- function(K, N0, r, t) {
+  gradient <- 1 / (1 + ((K - N0) / N0) * exp(-r * t))^2
+  return(gradient)
+}
+
+# Gradient function with respect to N0
+partial_derivative_N0 <- function(K, N0, r, t) {
+  gradient <- (K^2 / N0^2) * exp(-r * t) / (1 + ((K - N0) / N0) * exp(-r * t))^2
+  return(gradient)
+}
+
+# Gradient function with respect to r
+partial_derivative_r <- function(K, N0, r, t) {
+  gradient <- (K * t * (K - N0) * exp(-r * t)) / (N0 * (1 + ((K - N0) / N0) * exp(-r * t))^2)
+  return(gradient)
+}
+```
+
+## and for the full likelihood gradient
+
+```{r}
+#| echo: TRUE
+likelihood_gradient <- function(K, N0, r, sigma, N_obs, t_obs){
+  t0 <- log(K/N0-1)/r
+  g_LL_K <- 0
+  g_LL_N0 <- 0
+  g_LL_r <- 0
+  g_LL_sigma <- 0
+  for(i in seq_along(t_obs)){
+    N_t <- K/(1+exp(-r*(t_obs[i]-t0)))
+    
+    #Calculate the simpler PD wrt sigma
+    g_LL_sigma <- g_LL_sigma - 1/sigma + 1/sigma^3*(N_obs[i]- N_t)^2
+    
+    #Normal pdf contribution
+    dlogf_dN <- (N_obs[i]- N_t)/sigma^2
+    g_LL_K <- g_LL_K + dlogf_dN * partial_derivative_K(K, N0, r, t_obs[i])
+    g_LL_N0 <- g_LL_N0 + dlogf_dN * partial_derivative_N0(K, N0, r, t_obs[i])
+    g_LL_r <- g_LL_r + dlogf_dN * partial_derivative_r(K, N0, r, t_obs[i])
+  
+  }
+  return(list(sigma = g_LL_sigma, N0 = g_LL_N0, K = g_LL_K, r = g_LL_r))
+}
+```
+
+## Analytical gradient results
+
+We then get the gradient of our model log-likelihood
+```{r}
+#| echo: TRUE
+gradient_analytical <- likelihood_gradient(K, N0, r, sd_noise, d_df$observed, t_obs)
+gradient_analytical
+```
+
+Note that the trick only worked because we had an exact solution of the ode!
+
+# Automatic differentiation {background-image="images/background_h1.jpeg"}
+
+::: footer
+:::
+
+## General idea
+
+After a pass forward, we need to pass through the observation points backward in time going from one state to the other using a system of ODEs containing:
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+(1) the states;
+(2) the ajoints of the states;
+(3) the adjoints of parameters (apart from compare or initial conditions ones) 
+:::
+
+::: {.column width="50%"}
+:::
+
+::::
+![](images/ode_AD_chen.png){.absolute top=260 left=520 width="489" height="338"}
+
+## Forward pass
+
+- We run the ODEs forward to get the last observation point:
+```{r}
+#| echo: TRUE
+#Run system until last observation
+last_obs <- length(t_obs)
+mod$initialize(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise), time = 0, n_particles = 1)
+y_end <- mod$run(t_obs[last_obs])
+```
+
+## Running backwards {.smaller}
+
+- We then need to run backward the state equations
+- Running backward in time = change of variable $\rightarrow s = t_{end}-t$
+- The ODE system $\frac{dz(t)}{dt}=f(z(t),t,\theta)$ then becomes
+$$
+\begin{align*}
+\frac{dz(s)}{ds} &= \frac{dz(t)}{dt}\frac{dt}{ds} \\
+ &= -f(z(t_{end}-s),t_{end}-s,\theta)
+\end{align*}
+$$
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+Forward version
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(N) <- r * N * (1 - N / K)
+initial(N) <- N0
+```
+:::
+
+::: {.column width="50%"}
+
+Backward version
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(N) <- r * N * (N / K - 1)
+initial(N) <- N_end
+```
+:::
+::::
+
+## Adjoint state equations {.smaller}
+
+- At the same time, we run the adjoint state equations using:
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+**General case**
+
+$\frac{da(t)}{dt}=-a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial z}$ 
+:::
+
+::: {.column width="50%"}
+
+**Logistic growth example**
+
+$\frac{da_{N}(t)}{dt}=-a_{N}(t) \frac{d \left [ rN \left ( 1- \frac{N}{K}\right ) \right ]}{d N}$ 
+
+:::
+
+::::
+
+- Only one state variable $N$
+- We compute the partial derivative of the RHS of deriv_N wrt to $N$
+```{r}
+#| echo: TRUE
+ff <- quote(r * N * (1 - N / K))
+D(ff, "N")
+```
+- Remember that we need to "reverse" time in the  equation. This results in the (simplified) following adjoint state equation
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(adj_N) <- adj_N * r * (1- 2 * N/K)
+initial(adj_N) <- adj_N_end
+```
+
+
+## Building the dependency graph
+
+- Here dim(state)=1, if >1 we would look at which other states the RHS depend on using the dependency graph
+
+```{r}
+#| echo: TRUE
+parsed_model <- jsonlite::fromJSON(odin::odin_parse("models/logistic_growth_normal_obs.R"))
+construct_param_tree <- function(parsed_model){
+  parameter_graph <- NULL
+  for(n in seq_along(parsed_model$equations$name)){
+    if(!is.null(parsed_model$equations$depends$variables[n][[1]])){
+      for(p in eval(parsed_model$equations$depends$variables[n][[1]]))
+        parameter_graph <- rbind(parameter_graph,
+                                 c(p,parsed_model$equations$name[n]))
+    }
+  }
+  igraph::graph_from_edgelist(parameter_graph)
+}
+param_graph <- construct_param_tree(parsed_model)
+```
+
+## Dependency graph
+
+```{r}
+#| echo: TRUE
+igraph::print_all(param_graph)
+```
+
+## Adjoint parameters equations (1) {.smaller}
+
+- Integrative parameter accumulation  has to be adapted for the ODE solver:
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+**Integral form**
+
+$\frac{dL}{d \theta} = \int_{t_{1}}^{t_{0}} a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}dt$
+
+:::
+
+::: {.column width="50%"}
+**ODE form**
+\begin{cases}
+\begin{align*}
+\frac{da_{\theta}(t)}{dt} &= a_{N}(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}\\
+a_{\theta}(0) &= a_{t_{1}}
+\end{align*}
+\end{cases}
+:::
+
+::::
+
+- We need to compute $\frac{\partial f(z(t),t,\theta)}{\partial \theta}$ for each parameter 
+```{r}
+#| echo: TRUE
+ff <- quote(r * N * (1 - N / K))
+D(ff, "K")
+```
+
+```{r}
+#| echo: TRUE
+ff <- quote(r * N * (1 - N / K))
+D(ff, "r")
+```
+
+## Adjoint parameters equations (2) {.smaller}
+
+- Resulting code
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(adj_K) <- -adj_N * r * (N/K)^2
+deriv(adj_r) <- -adj_N * N * (1 - N/K)
+initial(adj_K) <- adj_K_end
+initial(adj_r) <- adj_r_end
+```
+
+- Note that we do not need to reverse time here, the accumulation is already accounting for the reverse time-path in the boundary values of the integral $\int_{t_{1}}^{t_{0}} a(t)^{\intercal} \frac{\partial f(z(t),t,\theta)}{\partial \theta}dt$
+
+- Again, if dim(state) was >1 we would have need to use the dependency graph to compute the JVP
+
+## odin code for "reverse" model
+
+```{r, eval=FALSE}
+#| echo: TRUE
+deriv(N) <- r * N * (N / K - 1)
+deriv(adj_N) <- adj_N * r * (1- 2 * N/K)
+deriv(adj_K) <- -adj_N * r * (N/K)^2
+deriv(adj_r) <- -adj_N * N * (1 - N/K)
+deriv(t_model) <- -1
+
+initial(N) <- N_end
+initial(t_model) <- t_end
+initial(adj_N) <- adj_N_end
+initial(adj_K) <- adj_K_end
+initial(adj_r) <- adj_r_end
+
+N_end <- user(1)
+K <- user(100)
+r <- user()
+t_end <- user()
+adj_N_end <- user()
+adj_K_end <- user()
+adj_r_end <- user()
+```
+
+## Compiling the "reverse" model
+
+```{r compile-reverse-with-adjoints}
+#| echo: TRUE
+generator_reverse <- odin.dust::odin_dust("models/reverse_AD_logistic.R")
+```
+
+## Structure of the reverse pass {.smaller}
+
+Now that we have the reverse odin ODE model in place we need to write the R code looping through the observations
+```{r, eval=FALSE}
+#| echo: TRUE
+################################
+#  Initialisation block        #
+################################
+
+#Looping backwards through observations
+for(i in seq_along(t_obs)){
+  y_curr <- d_df$observed[n_obs-i+1]
+  
+  ################################
+  #  Contributions of data       #
+  ################################
+  #  Reverse ODE integration     #
+  ################################
+}
+
+############################################
+#  Contributions of initial conditions     #
+############################################
+```
+  
+## Initialising block
+
+- States initialised to last observation value
+- Adjoints initialised to 0
+```{r reverse-initialisation}
+#| echo: TRUE
+N_curr <- N_obs[last_obs]
+t_curr <- t_obs[last_obs]
+adj_N_curr <- 0
+adj_K_curr <- 0
+adj_r_curr <- 0
+adj_sigma_curr <- 0
+
+reverse_mod <- generator_reverse$new(pars= list(r=r, N0=N0, K=K, sd_noise=sd_noise,
+                                                N_end=N_curr,
+                                                t_end=t_curr,
+                                                adj_N_end=adj_N_curr,
+                                                adj_K_end=0,
+                                                adj_r_end=0),
+                                     time=0, n_particles = 1)
+```
+
+## Contributions of observations {.smaller}
+
+- PDF of observations: $\log (f) = -\log \sigma - \frac{1}{2} \log (2\pi) - \frac{1}{2 \sigma^2} ( N^{obs}-N )^2$
+- Contribution to state adj_N at observation point
+
+:::: {.columns}
+
+::: {.column width="50%"}
+**Partial derivative**
+```{r}
+#| echo: TRUE
+ff <- quote(-log(sigma) - 0.5 * log (2 * pi) -0.5/sigma^2 * (N_observed - N)^2)
+D(ff, "N")
+```
+:::
+
+::: {.column width="50%"}
+**R function**
+```{r}
+#| echo: TRUE
+contribution_data_adjoint <- function(observed, model, sd){
+  (observed-model)/sd^2
+}
+```
+:::
+::::
+
+- Contribution to parameter $\sigma$ at observation point............................................     
+
+:::: {.columns}
+
+::: {.column width="50%"}
+**Partial derivative**
+```{r}
+#| echo: TRUE
+ff <- quote(-log(sigma) - 0.5 * log (2 * pi) -0.5/sigma^2 * (N_observed - N)^2)
+D(ff, "sigma")
+```
+:::
+
+::: {.column width="50%"}
+**R function**
+```{r}
+#| echo: TRUE
+contribution_data_sigma <- function(observed, model, sd){
+  -1/sd + (observed-model)^2/sd^3
+}
+```
+:::
+::::
+
+## Propagating initial conditions
+
+- The same way than for the discrete case, IC need to be propagated in the adjoints
+- However here we have $N(0) = N_{0}$ so $a_{N_{0}}=\frac{\partial \log(L)} {\partial N_{0}}=\frac{\partial \log(L)} {\partial N(0)}=a_{N(0)}$
+```{r}
+#| echo: TRUE
+ff <- quote(N0)
+D(ff, "N0")
+```
+
+## Looping through observations
+
+```{r looping-ode-reverse-through-observations}
+#| echo: TRUE
+for(i in seq_along(t_obs)){
+  y_curr <- d_df$observed[n_obs - i + 1]
+  adj_N_curr <- adj_N_curr + contribution_data_adjoint(y_curr, N_curr, sd_noise)
+  adj_sigma_curr <- adj_sigma_curr + contribution_data_sigma(y_curr, N_curr, sd_noise)
+  reverse_mod$initialize(pars= list(r=1,
+                                    N_end=N_curr,
+                                    t_end=t_curr,
+                                    adj_N_end=adj_N_curr,
+                                    adj_K_end=adj_K_curr,
+                                    adj_r_end=adj_r_curr),
+                         time=0,
+                         n_particles = 1)
+  
+  flow_time <- if(n_obs>i) t_curr-t_obs[n_obs-i] else t_curr
+  reverse_mod$run(flow_time)
+
+  N_curr <- reverse_mod$state()[reverse_mod$info()$index$N]
+  t_curr <- t_obs[n_obs-i]
+  adj_N_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_N]
+  adj_K_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_K]
+  adj_r_curr <- reverse_mod$state()[reverse_mod$info()$index$adj_r]
+}
+```
+
+## Autodiff gradient results
+
+Saving the end result
+```{r}
+#| echo: TRUE
+gradient_AD <- c(
+adj_sigma_curr,
+reverse_mod$state()[reverse_mod$info()$index$adj_N],
+reverse_mod$state()[reverse_mod$info()$index$adj_K],
+reverse_mod$state()[reverse_mod$info()$index$adj_r])
+name_var <- c("sigma","N0","K","r")
+```
+
+Which gives
+```{r}
+#| echo: TRUE
+gradient_AD
+```
+
+# Wrapping up {background-image="images/background_h1.jpeg"}
+
+## Numerical differentiation gradient
+
+```{r numerical differentiation}
+#| echo: TRUE
+
+#TODO: do we need this if data is used in the PF?
+d <- dust::dust_data(d_df)
+mod$set_data(d)
+
+#creates data for pf
+d_df$t <- d_df$time #rename to respect convention that time should not be called time ;)
+pf_data <- mcstate::particle_filter_data(d_df, "t", rate=NULL, initial_time = 0)
+
+#creating the filter
+filter <- mcstate::particle_filter$new(data=pf_data, generator, n_particles = 1, compare = NULL)
+h <- 1e-6
+ND_sigma <- (filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise+h))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_N <- (filter$run(pars=list(r=r, N0=N0+h, K=K, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_K <- (filter$run(pars=list(r=r, N0=N0, K=K+h, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+ND_r <- (filter$run(pars=list(r=r+h, N0=N0, K=K, sd_noise=sd_noise))-filter$run(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise)))/h
+
+gradient_ND <- c(ND_sigma,ND_N,ND_K,ND_r)
+gradient_ND
+```
+
+## Comparison of the different methods
+
+```{r}
+knitr::kable(data.frame(Variable = name_var,
+                        AD = gradient_AD,
+                        analytical = unlist(gradient_analytical),
+                        ND = gradient_ND))
+```
+
+## References
+
+
+<!--  LocalWords:  revealjs sprintf writeLines readLines 
+ -->

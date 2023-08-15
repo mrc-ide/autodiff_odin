@@ -7,6 +7,7 @@ format:
     logo: "images/Imperial_clear_logo.png"
     footer: "[AutoDiff with odin](https://www.imperial.ac.uk/people/m.baguelin)"
     slide-number: c/t
+    footer: "[AutoDiff with odin (difference equations)](https://www.imperial.ac.uk/people/m.baguelin)"
 ---
 
 # Automatic Differentiation
@@ -301,13 +302,13 @@ names(param_graph[1,])[which(param_graph["n_IR",]==1)]
 - Get the associated function giving the partial derivative
 ```{r}
 #| echo: TRUE
-ff <- parse(text="I + n_SI - n_IR")
+ff <- quote(I + n_SI - n_IR)
 D(ff, "n_IR")
 ```
 
 ```{r}
 #| echo: TRUE
-ff <- parse(text="R + n_IR")
+ff <- quote(R + n_IR)
 D(ff, "n_IR")
 ```
 
@@ -373,7 +374,7 @@ $\log(LL_t) = k_{t}\log(x[6,1,t])-x[6,1,t]-\log({k_{t}!})$
 
 ```{r}
 #| echo: TRUE
-ff <- parse(text="k*log(x)-x-factorial(k)")
+ff <- quote(k*log(x)-x-factorial(k))
 D(ff, "x")
 ```
 
@@ -613,7 +614,7 @@ for(i in 1:repeat_n)
                      rstan::unconstrain_pars(stan_fit,list(beta=0.25, gamma = 0.1, I0=10))))
 ```
 
-# Going further
+## Going further
 
 - Looping through dimensions
 - Problem of step 0 is last step of adjoint programme
