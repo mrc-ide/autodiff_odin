@@ -315,7 +315,7 @@ After a pass forward, we need to pass through the observation points backward in
 #| echo: TRUE
 #Run system until last observation
 last_obs <- length(t_obs)
-mod$initialize(pars=list(r=r, N0=N0, K=K, sd_noise=5), time = 0, n_particles = 1)
+mod$initialize(pars=list(r=r, N0=N0, K=K, sd_noise=sd_noise), time = 0, n_particles = 1)
 y_end <- mod$run(t_obs[last_obs])
 ```
 
@@ -381,7 +381,7 @@ $\frac{da_{N}(t)}{dt}=-a_{N}(t) \frac{d \left [ rN \left ( 1- \frac{N}{K}\right 
 - We compute the partial derivative of the RHS of deriv_N wrt to $N$
 ```{r}
 #| echo: TRUE
-ff <- parse(text="r * N * (1 - N / K)")
+ff <- quote(r * N * (1 - N / K))
 D(ff, "N")
 ```
 - Remember that we need to "reverse" time in the  equation. This results in the (simplified) following adjoint state equation
@@ -449,13 +449,13 @@ a_{\theta}(0) &= a_{t_{1}}
 - We need to compute $\frac{\partial f(z(t),t,\theta)}{\partial \theta}$ for each parameter 
 ```{r}
 #| echo: TRUE
-ff <- parse(text="r * N * (1 - N / K)")
+ff <- quote(r * N * (1 - N / K))
 D(ff, "K")
 ```
 
 ```{r}
 #| echo: TRUE
-ff <- parse(text="r * N * (1 - N / K)")
+ff <- quote(r * N * (1 - N / K))
 D(ff, "r")
 ```
 
@@ -544,7 +544,7 @@ adj_K_curr <- 0
 adj_r_curr <- 0
 adj_sigma_curr <- 0
 
-reverse_mod <- generator_reverse$new(pars= list(r=1,
+reverse_mod <- generator_reverse$new(pars= list(r=r, N0=N0, K=K, sd_noise=sd_noise,
                                                 N_end=N_curr,
                                                 t_end=t_curr,
                                                 adj_N_end=adj_N_curr,
@@ -564,7 +564,7 @@ reverse_mod <- generator_reverse$new(pars= list(r=1,
 **Partial derivative**
 ```{r}
 #| echo: TRUE
-ff <- parse(text="-log(sigma) - 0.5 * log (2 * pi) -0.5/sigma^2 * (N_observed - N)^2")
+ff <- quote(-log(sigma) - 0.5 * log (2 * pi) -0.5/sigma^2 * (N_observed - N)^2)
 D(ff, "N")
 ```
 :::
@@ -588,7 +588,7 @@ contribution_data_adjoint <- function(observed, model, sd){
 **Partial derivative**
 ```{r}
 #| echo: TRUE
-ff <- parse(text="-log(sigma) - 0.5 * log (2 * pi) -0.5/sigma^2 * (N_observed - N)^2")
+ff <- quote(-log(sigma) - 0.5 * log (2 * pi) -0.5/sigma^2 * (N_observed - N)^2)
 D(ff, "sigma")
 ```
 :::
@@ -610,7 +610,7 @@ contribution_data_sigma <- function(observed, model, sd){
 - However here we have $N(0) = N_{0}$ so $a_{N_{0}}=\frac{\partial \log(L)} {\partial N_{0}}=\frac{\partial \log(L)} {\partial N(0)}=a_{N(0)}$
 ```{r}
 #| echo: TRUE
-ff <- parse(text="N0")
+ff <- quote(N0)
 D(ff, "N0")
 ```
 
