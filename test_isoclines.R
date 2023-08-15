@@ -1,3 +1,27 @@
+#Add support for generation of model with gradient
+#limited scope and support at the moment
+
+remotes::install_github("mrc-ide/odin@mrc-4358", upgrade = FALSE, force = TRUE)
+remotes::install_github("mrc-ide/odin.dust@mrc-4359", upgrade = FALSE, force = TRUE)
+remotes::install_github("mrc-ide/dust@mrc-4307", upgrade = FALSE, force = TRUE)
+remotes::install_github("mrc-ide/mcstate", upgrade = FALSE, force = TRUE)
+
+sir_gen <- odin.dust::odin_dust("models/sir_adjoint.R")
+
+beta <- 2
+gamma <- 1
+I0 <- 1
+pars <- list(beta = beta, gamma = gamma, I0 = I0)
+sir_model <- sir_gen$new(pars, 0, 100)
+
+incidence <- read.csv(system.file("sir_incidence.csv", package = "mcstate"))
+
+dt <- 0.25
+sir_data <- mcstate::particle_filter_data(data = incidence,
+                                          time = "day",
+                                          rate = 1 / dt,
+                                          initial_time = 0)
+
 #Mean of the two distributions
 mu <- c(prior_par$meanlog_beta,prior_par$meanlog_gamma)
 #Build VCV matrix assuming independance between the two prior distributions
