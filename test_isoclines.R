@@ -16,11 +16,21 @@ sir_model <- sir_gen$new(pars, 0, 100)
 
 incidence <- read.csv(system.file("sir_incidence.csv", package = "mcstate"))
 
+incidence$cases_observed <- incidence$cases
+
 dt <- 0.25
 sir_data <- mcstate::particle_filter_data(data = incidence,
                                           time = "day",
                                           rate = 1 / dt,
                                           initial_time = 0)
+
+d <- dust::dust_data(incidence, name_time = "day")
+sir_model$set_data(d)
+
+pf_data <- mcstate::particle_filter_data(sir_data, "day", rate=1 / dt, initial_time = 0)
+
+#creating the filter
+filter <- mcstate::particle_filter$new(data=sir_data, sir_gen, n_particles = 1, compare = NULL)
 
 #Mean of the two distributions
 mu <- c(prior_par$meanlog_beta,prior_par$meanlog_gamma)
