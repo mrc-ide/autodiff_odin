@@ -31,4 +31,32 @@ for(i in 1:1000){
   x <- x + h * res$gradient
   mod$update_state(list(beta = x["beta"], gamma = x["gamma"], I0 = x["I0"]), time = 0)
 }
-LL_chain[-(1:950)]
+
+x <- c(0.25, 0.1, 1)
+h <- 1e-8
+names(x) <- c("beta", "gamma", "I0")
+LL_chain2 <- NULL
+
+# Initialize NAG-specific variables
+momentum <- 0.8
+velocity <- rep(0, length(x))
+
+for (i in 1:1000) {
+  # Calculate gradient using the current lookahead position
+
+  lookahead_x <- x + momentum * velocity
+  mod$update_state(list(beta = lookahead_x["beta"], gamma = lookahead_x["gamma"], I0 = lookahead_x["I0"]), time = 0)
+  res <- mod$run_adjoint()
+  gradient <- res$gradient
+
+  # Update Nesterov velocity
+  velocity <- momentum * velocity + h * gradient
+
+  # Update the parameters using the Nesterov velocity
+  x <- x + velocity
+
+  # Update model state
+  mod$update_state(list(beta = x["beta"], gamma = x["gamma"], I0 = x["I0"]), time = 0)
+  res <- mod$run_adjoint()
+  LL_chain2 <- c(LL_chain2, res$log_likelihood)
+}
