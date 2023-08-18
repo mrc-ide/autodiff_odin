@@ -64,8 +64,8 @@ points(df[mid_point,"beta"], df[mid_point,"gamma"], pch=19, col="orange")
 theta <- df[mid_point,c("beta","gamma","I0")]
 dist <- function(x) sqrt(sum(x["beta"]^2+x["gamma"]^2))
 
-l <- 0.01
-n_step <- 1000
+l <- 0.0001
+n_step <- 10000
 LP_chain <- NULL
 LL_chain <- NULL
 for(i in seq(n_step)){
@@ -83,6 +83,8 @@ for(i in seq(n_step)){
 
 }
 
+#plot(seq(from=l, to=l*n_step, by=l),LL_chain, type="l")
+#lines(seq(from=l, to=l*n_step, by=l),LL_chain, col="blue")
 
 
 
