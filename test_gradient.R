@@ -53,7 +53,7 @@ plot(prior_df$beta, prior_df$gamma,
      pch = 19, col=grey(.9), xlab="beta", ylab="gamma",
      xlim = c(0,1.5), ylim = c(0,1.5))
 points(df$beta, df$gamma, pch = 19, col=grey(.4))
-points(df$beta[good_LL], df$gamma[good_LL], pch = 19, col="red")
+points(df$beta[good_LL], df$gamma[good_LL], pch = 19, col="green")
 
 up_target <- min(df$log_likelihood[good_LL])
 low_target <- max(df$log_likelihood[!good_LL])
@@ -74,7 +74,7 @@ for(i in seq(n_step)){
   theta_h <- theta + l*c(grad_theta$gradient["gamma"],
                          -grad_theta$gradient["beta"],
                          0)/dist(grad_theta$gradient)
-  lines(c(theta["beta"], theta_h["beta"]), c(theta["gamma"], theta_h["gamma"]), col="green", lwd = 3)
+  lines(c(theta["beta"], theta_h["beta"]), c(theta["gamma"], theta_h["gamma"]), col="red", lwd = 3)
 
   theta <- theta_h
 
