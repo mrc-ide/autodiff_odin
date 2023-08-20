@@ -1,0 +1,15 @@
+---
+title: "HMC and odin"
+author: "Marc Baguelin"
+format:
+  tickle_ext-revealjs:
+    footer: "[AutoDiff with odin](https://www.imperial.ac.uk/people/m.baguelin)"
+    slide-number: c/t
+---
+
+# Principles {background-image="images/background_h1.jpeg"}
+
+```{r}
+
+```
+

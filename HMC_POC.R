@@ -20,18 +20,24 @@ pars <- list(beta = 0.25, gamma = 0.1, I0 = 1)
 mod <- gen$new(pars, 0, 1, deterministic = TRUE)
 mod$set_data(d)
 
-compute_gradient <- function(mod, pars, t = 0){
+compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
+  pars <- as.list(trans(theta))
   mod$update_state(pars, time = t)
-  mod$run_adjoint()
+  res_adj <- mod$run_adjoint()
+  list(log_likelihood = res_adj$log_likelihood,
+       gradient = pd_trans(theta)*res_adj$gradient)
 }
 
-HMC_step <- function(mod, current_theta, epsilon, L){
+g <- function(theta) {exp(theta)}
+dg <- function(theta) {exp(theta)}
+
+HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
   current_v <- rnorm(length(theta),0,1) # independent standard normal variates
   theta <- current_theta
   v <- current_v
 
   # Make a half step for momentum at the beginning
-  v <- v - epsilon * compute_gradient(mod, as.list(current_theta))$gradient / 2
+  v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
 
   # Alternate full steps for position and momentum
   for (i in 1:L)
@@ -39,18 +45,18 @@ HMC_step <- function(mod, current_theta, epsilon, L){
     # Make a full step for the position
     theta <- theta + epsilon * v
     # Make a full step for the momentum, except at end of trajectory
-    if (i!=L) v <- v - epsilon * compute_gradient(mod, as.list(theta))$gradient }
+    if (i!=L) v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient }
 
   # Make a half step for momentum at the end.
-  v <- v - epsilon * compute_gradient(mod, as.list(theta))$gradient / 2
+  v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
   # Negate momentum at end of trajectory to make the proposal symmetric
   v <- -v
   # Evaluate potential and kinetic energies at start and end of trajectory
-  current_U <- compute_gradient(mod, as.list(current_theta))$log_likelihood
+  current_U <- compute_gradient(mod, current_theta, g, dg)$log_likelihood
   current_K <- sum(current_v^2) / 2
-  proposed_U <- compute_gradient(mod, as.list(theta))$log_likelihood
-  proposed_K = sum(v^2) / 2
-  #browser()
+  proposed_U <- compute_gradient(mod, theta, g, dg)$log_likelihood
+  proposed_K <- sum(v^2) / 2
+  if(is.na(exp(current_U-proposed_U+current_K-proposed_K))) { browser()}
   # Accept or reject the state at end of trajectory, returning either # the position at the end of the trajectory or the initial position
   if (runif(1) < exp(current_U-proposed_U+current_K-proposed_K))
   {
@@ -60,11 +66,11 @@ HMC_step <- function(mod, current_theta, epsilon, L){
   }
 }
 
-theta <- df[mid_point,c("beta","gamma","I0")]
-n_steps <- 1000
+theta <- log(unlist(pars))
+n_steps <- 100000
 theta_chain <- NULL
 for(i in seq(n_steps)){
-  theta <- HMC_step(mod, theta, 0.00005, 3)
+  theta <- HMC_step(mod, theta, 0.0001, 10, g, dg)
   theta_chain <- rbind(theta_chain, theta)
 }
 
