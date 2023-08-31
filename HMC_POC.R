@@ -21,14 +21,14 @@ mod <- gen$new(pars, 0, 1, deterministic = TRUE)
 mod$set_data(d)
 
 compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
-  pars <- as.list(trans(theta))
+  pars <- trans(theta)
   mod$update_state(pars, time = t)
   res_adj <- mod$run_adjoint()
-  list(log_likelihood = res_adj$log_likelihood,
-       gradient = pd_trans(theta)*res_adj$gradient)
+  list(log_likelihood = -res_adj$log_likelihood,
+       gradient = -pd_trans(theta)*res_adj$gradient)
 }
 
-g <- function(theta) {exp(theta)}
+g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
 
 HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
@@ -57,6 +57,11 @@ HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
   current_K <- sum(current_v^2) / 2
   proposed_U <- compute_gradient(mod, theta, g, dg)$log_likelihood
   proposed_K <- sum(v^2) / 2
+  print(paste0("Current H: ",current_U+current_K,
+               ", New H: ",proposed_U+proposed_K,
+               " , Error: ", (current_U-proposed_U+current_K-proposed_K)/(current_U+current_K),
+               " AR: ", min(1,exp(current_U-proposed_U+current_K-proposed_K))*100, "%",
+               ", LL: ", current_U))
   if(is.na(exp(current_U-proposed_U+current_K-proposed_K))) { browser()
     }
   # Accept or reject the state at end of trajectory, returning either # the position at the end of the trajectory or the initial position
@@ -69,13 +74,20 @@ HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
 }
 
 theta <- log(unlist(pars))
-n_steps <- 1000
+n_steps <- 10000
 theta_chain <- NULL
 for(i in seq(n_steps)){
-  theta <- HMC_step(mod, theta, 0.0001, 10, g, dg)
-  theta_chain <- rbind(theta_chain, theta)
+  theta <- HMC_step(mod, theta, 0.015, 10, g, dg)
+  theta_chain <- rbind(theta_chain, c(theta,compute_gradient(mod, theta, g, dg)$log_likelihood))
 }
 
 plot(theta_chain[,"gamma"], type="l")
 
+theta <- log(unlist(pars))
+compute_gradient(mod, theta, g, dg)
+
+#checking ND vs AD gradient
+h <- 1e-7
+(compute_gradient(mod, theta+c(0,0,h), g, dg)$log_likelihood - compute_gradient(mod, theta, g, dg)$log_likelihood)/h
+compute_gradient(mod, theta, g, dg)$gradient
 
