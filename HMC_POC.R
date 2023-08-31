@@ -32,6 +32,7 @@ g <- function(theta) {exp(theta)}
 dg <- function(theta) {exp(theta)}
 
 HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
+  #browser()
   current_v <- rnorm(length(theta),0,1) # independent standard normal variates
   theta <- current_theta
   v <- current_v
@@ -56,7 +57,8 @@ HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
   current_K <- sum(current_v^2) / 2
   proposed_U <- compute_gradient(mod, theta, g, dg)$log_likelihood
   proposed_K <- sum(v^2) / 2
-  if(is.na(exp(current_U-proposed_U+current_K-proposed_K))) { browser()}
+  if(is.na(exp(current_U-proposed_U+current_K-proposed_K))) { browser()
+    }
   # Accept or reject the state at end of trajectory, returning either # the position at the end of the trajectory or the initial position
   if (runif(1) < exp(current_U-proposed_U+current_K-proposed_K))
   {
@@ -67,7 +69,7 @@ HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
 }
 
 theta <- log(unlist(pars))
-n_steps <- 100000
+n_steps <- 1000
 theta_chain <- NULL
 for(i in seq(n_steps)){
   theta <- HMC_step(mod, theta, 0.0001, 10, g, dg)
