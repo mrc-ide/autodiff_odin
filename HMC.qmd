@@ -1,15 +1,170 @@
 ---
-title: "HMC and odin"
+title: "Hamiltonian Monte Carlo, AutoDiff and odin"
 author: "Marc Baguelin"
 format:
-  tickle_ext-revealjs:
-    footer: "[AutoDiff with odin](https://www.imperial.ac.uk/people/m.baguelin)"
+  revealjs:
+    footer: "[HMC, AutoDiff and odin](https://www.imperial.ac.uk/people/m.baguelin)"
     slide-number: c/t
 ---
 
-# Principles {background-image="images/background_h1.jpeg"}
+# Principles
+
+## Hamiltonian Monte Carlo
+
+- in short HMC
+- an algorithm akin to MCMC which exploits Hamiltonian dynamics to move more efficiently in the parameter space
+- Requires the gradient of the log-density (the score)
+- In its simplest form, uses two parameters, $\epsilon$ and $L$
+
+## Hamiltonian trajectories
+
+- In its simplest form, uses two parameters, $\epsilon$ and $L$
+- $\epsilon$ the integration over the Hamiltonian trajectories
+- $L$ the number of step before proposing the new parameter set
+
+## AutoDiff
+
+- AutoDiff provides fast methods for getting gradient of log-density
+
+# Worked example: SIR model
 
 ```{r}
-
+r_output <- function(path, highlight = NULL) {
+  if (is.null(highlight)) {
+    prefix <- "```r"
+  } else {
+    prefix <- sprintf('```{.r code-line-numbers="%s"}', highlight)
+  }
+  writeLines(c(prefix, readLines(path), "```"))
+}
+set.seed(1) # always the same
+knitr::knit_hooks$set(small_margins = function(before, options, envir) {
+  if (before) {
+    par(mar = c(4, 4, .1, .1))
+  }
+})
 ```
 
+## odin interface for differentiation
+
+- needs to specify which parameter needs to be differentiated with AutoDiff
+
+```{r, eval=FALSE}
+#| echo: TRUE
+beta <- user(0.2, differentiate = TRUE)
+gamma <- user(0.1, differentiate = TRUE)
+I0 <- user(10, differentiate = TRUE)
+```
+
+- sote that we might not want to differentiate all the parameters of the odin model
+- some "parameters" might actually be data input
+- some parameters might be discrete
+
+## model odin code
+
+an SIR model with poisson observation
+```{r odin-SIR-with-observations}
+#| results: "asis"
+r_output("models/sir_adjoint.R")
+```
+
+## Compiling the model
+
+create generator for dust model
+```{r}
+#| echo: TRUE
+gen <- odin.dust::odin_dust("models/sir_adjoint.R")
+```
+
+## Set up the model with associated data
+
+```{r}
+#| echo: TRUE
+incidence <- read.csv("data/incidence.csv")
+incidence <- data.frame(
+  time = incidence$day * 4,
+  cases_observed = incidence$cases)
+d <- dust::dust_data(incidence)
+
+# Create set of parameters
+pars <- list(beta = 0.25, gamma = 0.1, I0 = 1)
+
+# Create new deterministic model with data attached
+mod <- gen$new(pars, 0, 1, deterministic = TRUE)
+mod$set_data(d)
+```
+
+## Gradient function
+
+```{r}
+#| echo: TRUE
+compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
+  pars <- trans(theta)
+  mod$update_state(pars, time = t)
+  res_adj <- mod$run_adjoint()
+  list(log_likelihood = -res_adj$log_likelihood,
+       gradient = -pd_trans(theta)*res_adj$gradient)
+}
+
+g <- function(theta) {as.list(exp(theta))}
+dg <- function(theta) {exp(theta)}
+```
+
+## HMC step
+
+```{r}
+#| echo: TRUE
+HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
+  #browser()
+  current_v <- rnorm(length(theta),0,1) # independent standard normal variates
+  theta <- current_theta
+  v <- current_v
+
+  # Make a half step for momentum at the beginning
+  v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
+
+  # Alternate full steps for position and momentum
+  for (i in 1:L)
+  {
+    # Make a full step for the position
+    theta <- theta + epsilon * v
+    # Make a full step for the momentum, except at end of trajectory
+    if (i!=L) v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient }
+
+  # Make a half step for momentum at the end.
+  v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
+  # Negate momentum at end of trajectory to make the proposal symmetric
+  v <- -v
+  # Evaluate potential and kinetic energies at start and end of trajectory
+  current_U <- compute_gradient(mod, current_theta, g, dg)$log_likelihood
+  current_K <- sum(current_v^2) / 2
+  proposed_U <- compute_gradient(mod, theta, g, dg)$log_likelihood
+  proposed_K <- sum(v^2) / 2
+  if (runif(1) < exp(current_U-proposed_U+current_K-proposed_K))
+  {
+    return (theta) # accept
+  } else {
+    return (current_theta) # reject
+  }
+}
+```
+
+## Run the HMC
+
+```{r}
+#| echo: TRUE
+theta <- log(unlist(pars))
+n_steps <- 10000
+theta_chain <- NULL
+for(i in seq(n_steps)){
+  theta <- HMC_step(mod, theta, 0.015, 10, g, dg)
+  theta_chain <- rbind(theta_chain, c(theta,compute_gradient(mod, theta, g, dg)$log_likelihood))
+}
+```
+
+## Plot the resulting chain
+
+```{r}
+#| echo: TRUE
+plot(theta_chain[,"gamma"], type="l")
+```

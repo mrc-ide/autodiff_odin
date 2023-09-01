@@ -1,4 +1,3 @@
-# nolint start (can't cope with uppercase names here)
 dt <- 1.0 / freq
 p_IR <- 1 - exp(-(gamma) * dt)
 S0 <- 1000
@@ -30,4 +29,3 @@ cases_observed <- data()
 compare(cases_observed) ~ poisson(cases_inc)
 
 config(base) <- "sir"
-# nolint end
