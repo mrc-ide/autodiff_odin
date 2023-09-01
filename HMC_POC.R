@@ -57,13 +57,13 @@ HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
   current_K <- sum(current_v^2) / 2
   proposed_U <- compute_gradient(mod, theta, g, dg)$log_likelihood
   proposed_K <- sum(v^2) / 2
-  print(paste0("Current H: ",current_U+current_K,
-               ", New H: ",proposed_U+proposed_K,
-               " , Error: ", (current_U-proposed_U+current_K-proposed_K)/(current_U+current_K),
-               " AR: ", min(1,exp(current_U-proposed_U+current_K-proposed_K))*100, "%",
-               ", LL: ", current_U))
-  if(is.na(exp(current_U-proposed_U+current_K-proposed_K))) { browser()
-    }
+  # print(paste0("Current H: ",current_U+current_K,
+  #              ", New H: ",proposed_U+proposed_K,
+  #              " , Error: ", (current_U-proposed_U+current_K-proposed_K)/(current_U+current_K),
+  #              " AR: ", min(1,exp(current_U-proposed_U+current_K-proposed_K))*100, "%",
+  #              ", LL: ", current_U))
+  # if(is.na(exp(current_U-proposed_U+current_K-proposed_K))) { browser()
+  #   }
   # Accept or reject the state at end of trajectory, returning either # the position at the end of the trajectory or the initial position
   if (runif(1) < exp(current_U-proposed_U+current_K-proposed_K))
   {
