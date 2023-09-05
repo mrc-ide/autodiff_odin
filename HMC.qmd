@@ -5,26 +5,72 @@ format:
   revealjs:
     footer: "[HMC, AutoDiff and odin](https://www.imperial.ac.uk/people/m.baguelin)"
     slide-number: c/t
+bibliography: papers_autodiff.bib
 ---
 
 # Principles
 
-## Hamiltonian Monte Carlo
+## Hamiltonian Monte Carlo (HMC)
 
-- in short HMC
-- an algorithm akin to MCMC which exploits Hamiltonian dynamics to move more efficiently in the parameter space
-- Requires the gradient of the log-density (the score)
+- for more details see e.g. @neal_mcmc_2011 or @betancourt_conceptual_2018
+- an algorithm akin to RWMH-MCMC which exploits Hamiltonian dynamics to move more efficiently in the parameter space
+- requires the gradient of the log-density (the score)
 - In its simplest form, uses two parameters, $\epsilon$ and $L$
 
-## Hamiltonian trajectories
+## Hamiltonian dynamics - ideas
 
-- In its simplest form, uses two parameters, $\epsilon$ and $L$
-- $\epsilon$ the integration over the Hamiltonian trajectories
-- $L$ the number of step before proposing the new parameter set
+- We augment our position $\theta$ in the parameter space with a "momentum" $r$
+
+- While the dimension of the space to explore is doubled, this actually helps 
+
+- We can now describe the system in term of its "Hamiltonian" the sum of its kinetic (only depends of momentum) and potential (only depends on position) energies
+$$
+H(\theta, r) = T(r) + U(\theta)
+$$
+
+## Hamiltonian dynamics - equations
+
+We can move at constant energy levels using the Hamiltonian Dynamics Equations:
+\begin{cases}
+\begin{align*}
+\frac{d\theta}{dt} &= \frac{\partial H}{\partial r} \\
+\frac{dr}{dt} &= -\frac{\partial H}{\partial \theta}
+\end{align*}
+\end{cases}
+
+with $H$ is the Hamiltonian
+
+## Leapfrog integration
+
+- We can move at (almost) constant energy level using the Störmer-Verlet ("leapfrog") integrator
+\begin{cases}
+\begin{align}
+r_{t+\frac{1}{2}} &= r_t - \frac{1}{2} \nabla U(\theta_t) \cdot \epsilon \\
+\theta_{t+1} &= \theta_t + r_{t+\frac{1}{2}} \cdot \epsilon \\
+p_{t+1} &= p_{t+\frac{1}{2}} - \frac{1}{2} \nabla U(q_{t+1}) \cdot \epsilon 
+\end{align}
+\end{cases}
+
+- More stable than Euler integration
+
+## Algorithm
+
+- Step 1: run $L$ leapfrog step
+- Step 2: accept or reject with probability
+$$\min[1, e^{H(\theta,r) - H(\theta^*,r^*)}]$$
+- Step 3: run 1 & 2 until a certain number of steps is reached
 
 ## AutoDiff
 
-- AutoDiff provides fast methods for getting gradient of log-density
+- Key quantity in the algorithm is the gradient of the log-density
+- AutoDiff provides fast methods for getting gradient of log-density of odin model
+
+## Inference space vs odin model space
+
+In stan inference is done on an unconstrained space
+https://mc-stan.org/docs/reference-manual/variable-transforms.html
+
+It's a similar problem than the problem of the propagtion of the gradient from the odin model through the transform function
 
 # Worked example: SIR model
 
@@ -45,9 +91,9 @@ knitr::knit_hooks$set(small_margins = function(before, options, envir) {
 })
 ```
 
-## odin interface for differentiation
+## odin interface for AutoDiff
 
-- needs to specify which parameter needs to be differentiated with AutoDiff
+- specify which parameter to differentiate
 
 ```{r, eval=FALSE}
 #| echo: TRUE
@@ -56,9 +102,9 @@ gamma <- user(0.1, differentiate = TRUE)
 I0 <- user(10, differentiate = TRUE)
 ```
 
-- sote that we might not want to differentiate all the parameters of the odin model
-- some "parameters" might actually be data input
-- some parameters might be discrete
+- note that we might not want to differentiate all the parameters of the odin model
+  - e.g. data input
+  - or discrete parameters
 
 ## model odin code
 
@@ -71,13 +117,14 @@ r_output("models/sir_adjoint.R")
 ## Compiling the model
 
 create generator for dust model
-```{r}
+```{r non-eval-model-code}
 #| echo: TRUE
 gen <- odin.dust::odin_dust("models/sir_adjoint.R")
 ```
 
-## Set up the model with associated data
+## Set up data & model
 
+Read the data and put them in the right format
 ```{r}
 #| echo: TRUE
 incidence <- read.csv("data/incidence.csv")
@@ -85,10 +132,18 @@ incidence <- data.frame(
   time = incidence$day * 4,
   cases_observed = incidence$cases)
 d <- dust::dust_data(incidence)
+```
 
+Generate a set of parameters
+```{r}
+#| echo: TRUE
 # Create set of parameters
 pars <- list(beta = 0.25, gamma = 0.1, I0 = 1)
+```
 
+Creates a new dust model and attach the data to it
+```{r}
+#| echo: TRUE
 # Create new deterministic model with data attached
 mod <- gen$new(pars, 0, 1, deterministic = TRUE)
 mod$set_data(d)
@@ -96,7 +151,8 @@ mod$set_data(d)
 
 ## Gradient function
 
-```{r}
+A wrapper to transform the parameters, run adjoints and scale gradient back
+```{r compute-gradient-function}
 #| echo: TRUE
 compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
   pars <- trans(theta)
@@ -105,7 +161,11 @@ compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
   list(log_likelihood = -res_adj$log_likelihood,
        gradient = -pd_trans(theta)*res_adj$gradient)
 }
+```
 
+We use exponential to map from $\mathbb{R}^{d}$ to $\mathbb{R}_{+}^{d}$ and the gradient back to the "inference" space 
+```{r transform-functions}
+#| echo: TRUE
 g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
 ```
@@ -115,22 +175,20 @@ dg <- function(theta) {exp(theta)}
 ```{r}
 #| echo: TRUE
 HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
-  #browser()
   current_v <- rnorm(length(theta),0,1) # independent standard normal variates
   theta <- current_theta
   v <- current_v
-
+  
   # Make a half step for momentum at the beginning
   v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
-
+  
   # Alternate full steps for position and momentum
   for (i in 1:L)
   {
     # Make a full step for the position
     theta <- theta + epsilon * v
     # Make a full step for the momentum, except at end of trajectory
-    if (i!=L) v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient }
-
+    if (i!=L) v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient   }
   # Make a half step for momentum at the end.
   v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
   # Negate momentum at end of trajectory to make the proposal symmetric
@@ -168,3 +226,13 @@ for(i in seq(n_steps)){
 #| echo: TRUE
 plot(theta_chain[,"gamma"], type="l")
 ```
+
+## Further work
+
+- NUTS @hoffman_no-u-turn_2014
+- Mass
+- Riemannian HMC @Girolami2011
+
+## References
+
+
