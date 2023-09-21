@@ -92,9 +92,9 @@ h <- 1e-7
 compute_gradient(mod, theta, g, dg)$gradient
 
 #implement algorithm 4 from the NUTS paper
-leapfrog <- function(mod, current_theta, epsilon, g, dg){
+leapfrog <- function(mod, current_theta, current_v, epsilon, g, dg){
   #browser()
-  current_v <- rnorm(length(theta),0,1) # independent standard normal variates
+  #current_v <- rnorm(length(theta),0,1) # independent standard normal variates
   theta <- current_theta
   v <- current_v
 
@@ -119,16 +119,16 @@ hamiltonian <- function(theta, r, mod, g, dg){
 }
 
 find_epsilon1 <- function(mod, theta, g, dg, init_eps){
-  browser()
+  #browser()
   #the NUTS paper fix the initial value to 1, in practice this can lead to very big leaps
   #and generate NaN
   epsilon <- init_eps
   current_theta <- theta
   current_r <- rnorm(length(theta),0,1)
-  theta_r_prop <- leapfrog(mod, theta, epsilon, g, dg)
+  theta_r_prop <- leapfrog(mod, theta, current_r, epsilon, g, dg)
   if(exp(hamiltonian(theta_r_prop$theta,
                      theta_r_prop$r, mod, g, dg) -hamiltonian(current_theta,
-                                                 current_r, mod, g, dg)) > 0.5) a<-1 else a<- -1
+                                                 current_r, mod, g, dg)) > 0.5) a <- 1 else a <- -1
   while(exp(a*(hamiltonian(theta_r_prop$theta,
                         theta_r_prop$r, mod, g, dg) -hamiltonian(current_theta,
                                                                  current_r, mod, g, dg))) > 2^-a)
@@ -139,5 +139,5 @@ find_epsilon1 <- function(mod, theta, g, dg, init_eps){
   epsilon
 }
 
-find_epsilon1(mod, theta, g, dg, 0.01)
+find_epsilon1(mod, theta, g, dg, 0.0000001)
 
