@@ -73,12 +73,13 @@ find_epsilon1 <- function(mod, theta, g, dg, init_eps){
 
 build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, delta = 1000)
 {
+  #browser()
   if(j==0) {
     # base case, one leapfrog in direction v
     theta_r_prop <- leapfrog(mod, theta, r, epsilon, g, dg)
     H_prop <- hamiltonian(theta_r_prop$theta, theta_r_prop$r, mod, g, dg)
     H_0 <- hamiltonian(theta_0, r_0, mod, g, dg)
-    n <- u <= exp(H_prop)
+    n <- as.integer(u <= exp(H_prop))
     s <- u < exp(delta + H_prop)
     return(list(theta_minus = theta_r_prop$theta,
            r_minus = theta_r_prop$r,
@@ -90,6 +91,32 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
            alpha = min(1, exp(H_prop-H_0)),
            n_alpha = 1)
     )
+  } else { #j>0
+    result_list <- build_tree(theta, r, u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
+    if(result_list$s_prop){ # continue the tree unless stop condition is reached
+      if(v==-1){
+        alternative_list <- build_tree(result_list$theta_minus, result_list$r_minus,
+                               u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
+        result_list$theta_minus <- alternative_list$theta_minus
+        result_list$r_minus <- alternative_list$r_minus
+      } else { #v==1
+        alternative_list <- build_tree(result_list$theta_plus, result_list$r_plus,
+                               u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
+        result_list$theta_plus <- alternative_list$theta_plus
+        result_list$r_plus <- alternative_list$r_plus
+      }
+      sum_n_prop <- result_list$n_prop+alternative_list$n_prop
+      if(sum_n_prop > 0)
+        if(runif(1)<alternative_list$n_prop/sum_n_prop)
+          result_list$theta_prop <- alternative_list$theta_prop
+      result_list$alpha <- result_list$alpha + alternative_list$alpha
+      result_list$n_alpha <- result_list$n_alpha + alternative_list$n_alpha
+      result_list$s_prop <- alternative_list$s_prop &
+        ((result_list$theta_plus-result_list$theta_minus)%*%result_list$r_minus >= 0) &
+        ((result_list$theta_plus-result_list$theta_minus)%*%result_list$r_plus >= 0)
+      result_list$n_prop <- sum_n_prop
+    }
+    return(result_list)
   }
 }
 
@@ -99,4 +126,5 @@ theta <- log(unlist(pars))
 epsilon <- find_epsilon1(mod, theta, g, dg, 0.0001)
 r <- rnorm(length(theta),0,1)
 u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-tree <- build_tree(theta, r, u, v=-1, j=0, epsilon, theta, r, mod, g, dg, delta = 1000)
+tree <- build_tree(theta, r, u, v=-1, j=5, epsilon, theta, r, mod, g, dg, delta = 1000)
+tree$alpha
