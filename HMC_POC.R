@@ -134,7 +134,7 @@ find_epsilon1 <- function(mod, theta, g, dg, init_eps){
                                                                  current_r, mod, g, dg))) > 2^-a)
     {
       epsilon <- 2^a*epsilon
-      theta_r_prop <- leapfrog(mod, theta, epsilon, g, dg)
+      theta_r_prop <- leapfrog(mod, theta, current_r, epsilon, g, dg)
       }
   epsilon
 }
