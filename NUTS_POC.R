@@ -75,11 +75,14 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
 {
   #browser()
   if(j==0) {
+    #browser()
     # base case, one leapfrog in direction v
-    theta_r_prop <- leapfrog(mod, theta, r, epsilon, g, dg)
+    theta_r_prop <- leapfrog(mod, theta, r, v*epsilon, g, dg)
     H_prop <- hamiltonian(theta_r_prop$theta, theta_r_prop$r, mod, g, dg)
     H_0 <- hamiltonian(theta_0, r_0, mod, g, dg)
     n <- as.integer(u <= exp(H_prop))
+    lines(c(theta["beta"],theta_r_prop$theta["beta"]),c(theta["gamma"],theta_r_prop$theta["gamma"]))
+    points(theta_r_prop$theta["beta"],theta_r_prop$theta["gamma"])
     s <- u < exp(delta + H_prop)
     return(list(theta_minus = theta_r_prop$theta,
            r_minus = theta_r_prop$r,
@@ -93,6 +96,7 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
     )
   } else { #j>0
     result_list <- build_tree(theta, r, u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
+    #browser()
     if(result_list$s_prop){ # continue the tree unless stop condition is reached
       if(v==-1){
         alternative_list <- build_tree(result_list$theta_minus, result_list$r_minus,
@@ -123,8 +127,11 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
 g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
 theta <- log(unlist(pars))
+plot(theta["beta"],theta["gamma"],
+     xlim=c(theta["beta"]-.4,theta["beta"]+.4),
+     ylim=c(theta["gamma"]-.4,theta["gamma"]+.4), pch=19, col="red")
 epsilon <- find_epsilon1(mod, theta, g, dg, 0.0001)
 r <- rnorm(length(theta),0,1)
 u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-tree <- build_tree(theta, r, u, v=-1, j=5, epsilon, theta, r, mod, g, dg, delta = 1000)
+tree <- build_tree(theta, r, u, v=-1, j=10, epsilon, theta, r, mod, g, dg, delta = 1000)
 tree$alpha
