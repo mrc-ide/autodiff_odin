@@ -127,11 +127,11 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
 g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
 theta <- log(unlist(pars))
-plot(theta["beta"],theta["gamma"],
-     xlim=c(theta["beta"]-.4,theta["beta"]+.4),
-     ylim=c(theta["gamma"]-.4,theta["gamma"]+.4), pch=19, col="red")
+# plot(theta["beta"],theta["gamma"],
+#      xlim=c(theta["beta"]-.4,theta["beta"]+.4),
+#      ylim=c(theta["gamma"]-.4,theta["gamma"]+.4), pch=19, col="red")
 epsilon <- find_epsilon1(mod, theta, g, dg, 0.0001)
 r <- rnorm(length(theta),0,1)
 u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-tree <- build_tree(theta, r, u, v=-1, j=10, epsilon, theta, r, mod, g, dg, delta = 1000)
-tree$alpha
+tree <- build_tree(theta, r, u, v=-1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
+tree$n_prop
