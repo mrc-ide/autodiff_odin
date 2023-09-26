@@ -40,11 +40,11 @@ leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   theta <- current_theta
   r <- current_r
   # Make a half step for momentum
-  r <- r - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
+  r <- r + epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
   # Make a full step for theta
   theta <- theta + epsilon * r
   # Make a half step for momentum
-  r <- r - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
+  r <- r + epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
   return(list(theta = theta, r = r))
 }
 
@@ -54,6 +54,7 @@ leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
 # here it is given by user
 # and generate NaN
 find_epsilon1 <- function(mod, theta, g, dg, init_eps){
+  browser()
   epsilon <- init_eps
   current_theta <- theta
   current_r <- rnorm(length(theta),0,1)
@@ -127,14 +128,17 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
 g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
 theta <- log(unlist(pars))
-# plot(theta["beta"],theta["gamma"],
-#      xlim=c(theta["beta"]-.4,theta["beta"]+.4),
-#      ylim=c(theta["gamma"]-.4,theta["gamma"]+.4), pch=19, col="red")
-# epsilon <- find_epsilon1(mod, theta, g, dg, 0.0001)
-# r <- rnorm(length(theta),0,1)
-# u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-# tree <- build_tree(theta, r, u, v=-1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
-# print(tree$n_prop)
+plot(theta["beta"],theta["gamma"],
+     xlim=c(theta["beta"]-.4,theta["beta"]+.4),
+     ylim=c(theta["gamma"]-.4,theta["gamma"]+.4), pch=19, col="red")
+epsilon <- find_epsilon1(mod, theta, g, dg, 0.000001)
+for(i in 1:100){
+  r <- rnorm(length(theta),0,1)
+  u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
+  tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
+  print(tree$n_prop)
+}
+
 
 
 theta0 <- log(unlist(pars))
