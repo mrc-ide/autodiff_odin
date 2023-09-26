@@ -130,19 +130,20 @@ theta <- log(unlist(pars))
 # plot(theta["beta"],theta["gamma"],
 #      xlim=c(theta["beta"]-.4,theta["beta"]+.4),
 #      ylim=c(theta["gamma"]-.4,theta["gamma"]+.4), pch=19, col="red")
-epsilon <- find_epsilon1(mod, theta, g, dg, 0.0001)
-r <- rnorm(length(theta),0,1)
-u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-tree <- build_tree(theta, r, u, v=-1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
-print(tree$n_prop)
+# epsilon <- find_epsilon1(mod, theta, g, dg, 0.0001)
+# r <- rnorm(length(theta),0,1)
+# u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
+# tree <- build_tree(theta, r, u, v=-1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
+# print(tree$n_prop)
 
 
 theta0 <- log(unlist(pars))
 M <- 1000
 M_adapt <- 100
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
+D_max <- 1000
+epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)/5
 mu <- log(10*epsilon0)
-theta_m <- matrix(rep(theta0, M), ncol = length(theta0), byrow = TRUE)
+theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
 colnames(theta_m) <- names(theta0)
 
 tt <- rbind(theta0 ,theta0 ,theta0 )
@@ -150,26 +151,33 @@ tt <- rbind(theta0 ,theta0 ,theta0 )
 for(i in 1:M)
 {
   r0 <- rnorm(length(theta),0,1)
-  u <- runif(1)*exp(hamiltonian(theta_m[i], r0, mod, g, dg))
-  theta_minus <- theta_m[i]
-  theta_plus <- theta_m[i]
+  u <- runif(1)*exp(hamiltonian(theta_m[i,], r0, mod, g, dg))
+  theta_minus <- theta_m[i,]
+  theta_plus <- theta_m[i,]
   r_minus <- r0
   r_plus <- r0
   j <- 0
-  theta_prop <- theta_m[i]
+  theta_prop <- theta_m[i,]
   n <- 1
   s <- TRUE
   while(s){
     v <- sample(c(-1,1),1)
     if(v==-1){
       tree_list <- build_tree(theta_minus, r_minus,
-                                     u, v, j, epsilon0, theta_m[i], r_0, mod, g, dg, delta)
-      #result_list$theta_minus <- alternative_list$theta_minus
-      #result_list$r_minus <- alternative_list$r_minus
+                                     u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
     } else {
       tree_list <- build_tree(theta_plus, r_plus,
-                              u, v, j, epsilon0, theta_m[i], r_0, mod, g, dg, delta)
+                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
     }
+    #browser()
+    if(tree_list$s_prop)
+      if(runif(1)<min(1,tree_list$n_prop/n))
+        theta_m[i+1,] <- tree_list$theta_prop
+    n <- n + tree_list$n_prop
+    s <- tree_list$s_prop &
+      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
+      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
+    j <- j+1
   }
 }
 
