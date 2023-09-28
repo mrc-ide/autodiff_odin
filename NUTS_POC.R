@@ -32,10 +32,11 @@ gamma <- mcstate::pmcmc_parameter("gamma", 0.1, min = 0, prior = function(p)
   dgamma(p, shape = 1, scale = 0.2, log = TRUE))
 I0 <- mcstate::pmcmc_parameter("I0", 1, min = 0)
 
-proposal_matrix <- diag(0.1, 2)
-mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma),
+proposal_matrix <- diag(0.1, 3)
+proposal_matrix <- matrix(c(0.0002123093,0.0001906685,-0.0270819864,0.0001906685,0.0001908083,-0.0211008465,-0.0270819864,-0.0211008465,5.30085662), ncol=3)
+mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma, I0 = I0),
                                            proposal_matrix)
-n_steps <- 500000
+n_steps <- 5000
 control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
@@ -43,6 +44,7 @@ control <- mcstate::pmcmc_control(
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 plot(log(pmcmc_run$pars[,1]),log(pmcmc_run$pars[,2]))
+hist(pmcmc_run$probabilities[-(1:500),2])
 
 # Set up the data to attach to dust model
 d <- dust::dust_data(incidence)
