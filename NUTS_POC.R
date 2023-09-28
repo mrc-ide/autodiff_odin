@@ -6,7 +6,7 @@
 # Create generator for dust model
 gen <- odin.dust::odin_dust("models/sir_adjoint.R")
 
-# Create dust data
+# Create dataset
 incidence <- read.csv("data/incidence.csv")
 incidence <- data.frame(
   time = incidence$day * 4,
@@ -21,10 +21,28 @@ d_df$t <- 1:100 #rename to respect convention that time should not be called tim
 pf_data <- mcstate::particle_filter_data(d_df, "t", rate=4, initial_time = 0)
 
 # Creating the filter
-filter <- mcstate::particle_filter$new(data=pf_data, gen, n_particles = 1, compare = NULL)
+filter <- mcstate::particle_deterministic$new(data=pf_data, gen, compare = NULL)
 
 # Running the filter for likelihood estimation
 filter$run(pars = pars)
+
+# Run mcmc
+beta <- mcstate::pmcmc_parameter("beta", 0.2, min = 0)
+gamma <- mcstate::pmcmc_parameter("gamma", 0.1, min = 0, prior = function(p)
+  dgamma(p, shape = 1, scale = 0.2, log = TRUE))
+I0 <- mcstate::pmcmc_parameter("I0", 1, min = 0)
+
+proposal_matrix <- diag(0.1, 2)
+mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma),
+                                           proposal_matrix)
+n_steps <- 500000
+control <- mcstate::pmcmc_control(
+  n_steps,
+  save_state = TRUE,
+  save_trajectories = TRUE,
+  progress = TRUE)
+pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+plot(log(pmcmc_run$pars[,1]),log(pmcmc_run$pars[,2]))
 
 # Set up the data to attach to dust model
 d <- dust::dust_data(incidence)
