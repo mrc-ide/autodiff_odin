@@ -11,14 +11,35 @@ incidence <- read.csv("data/incidence.csv")
 incidence <- data.frame(
   time = incidence$day * 4,
   cases_observed = incidence$cases)
-d <- dust::dust_data(incidence)
 
 # Create set of parameters
 pars <- list(beta = 0.25, gamma = 0.1, I0 = 1)
 
+# Set up the data for the particle filter
+d_df <- incidence
+d_df$t <- 1:100 #rename to respect convention that time should not be called time ;)
+pf_data <- mcstate::particle_filter_data(d_df, "t", rate=4, initial_time = 0)
+
+# Creating the filter
+filter <- mcstate::particle_filter$new(data=pf_data, gen, n_particles = 1, compare = NULL)
+
+# Running the filter for likelihood estimation
+filter$run(pars = pars)
+
+# Set up the data to attach to dust model
+d <- dust::dust_data(incidence)
+
 # Create new deterministic model with data attached
 mod <- gen$new(pars, 0, 1, deterministic = TRUE)
 mod$set_data(d)
+
+# Running the likelihood evaluation using the odin model, compare and data
+mod$run_adjoint()
+
+# Simulating the model and calculating the likelihood based on this
+mod$update_state(time = 0)
+y <- mod$simulate(c(1:100)*4)
+sum(dpois(x = incidence$cases_observed, lambda = y[mod$info()$index$cases_inc,1,], log = TRUE))
 
 compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
   pars <- trans(theta)
@@ -37,6 +58,9 @@ hamiltonian <- function(theta, r, mod, g, dg){
 # perform 1 leafrog integration of step epsilon
 leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   # initialise to the current value of theta and r
+  print(current_theta)
+  print(current_r)
+  print(epsilon)
   theta <- current_theta
   r <- current_r
   # Make a half step for momentum
@@ -141,14 +165,16 @@ plot(theta["beta"],theta["gamma"],
      xlim=c(theta["beta"]-2,theta["beta"]+2),
      ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
 epsilon <- find_epsilon1(mod, theta, g, dg, 0.000001)
-#epsilon <- 0.001
-# for(i in 1:100){
-#   r <- rnorm(length(theta),0,1)
-#   u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-#   tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
-#   print(tree$n_prop)
-# }
+for(i in 1:100){
+  r <- rnorm(length(theta),0,1)
+  u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
+  tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
+  print(tree$n_prop)
+}
 
+theta <- c(-106.30584, 100.80329, -21.51924)
+r <- rnorm(length(theta),0,1)
+leapfrog(mod, theta, r, epsilon, g, dg)
 
 # plot(theta["beta"],theta["gamma"],
 #      xlim=c(theta["beta"]-3,theta["beta"]+2),
