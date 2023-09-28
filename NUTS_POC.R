@@ -54,21 +54,30 @@ leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
 # here it is given by user
 # and generate NaN
 find_epsilon1 <- function(mod, theta, g, dg, init_eps){
-  browser()
+  #browser()
   epsilon <- init_eps
-  current_theta <- theta
-  current_r <- rnorm(length(theta),0,1)
-  theta_r_prop <- leapfrog(mod, theta, current_r, epsilon, g, dg)
-  if(exp(hamiltonian(theta_r_prop$theta,
-                     theta_r_prop$r, mod, g, dg) -hamiltonian(current_theta,
-                                                              current_r, mod, g, dg)) > 0.5) a <- 1 else a <- -1
-  while(exp(a*(hamiltonian(theta_r_prop$theta,
-                           theta_r_prop$r, mod, g, dg) -hamiltonian(current_theta,
-                                                                    current_r, mod, g, dg))) > 2^-a)
+  r <- rnorm(length(theta),0,1)
+  theta_r_prop <- leapfrog(mod, theta, r, epsilon, g, dg)
+  if(exp(hamiltonian(theta, r, mod, g, dg)-
+         hamiltonian(theta_r_prop$theta,
+                     theta_r_prop$r, mod, g, dg)) > 0.5) a <- 1 else a <- -1
+  print(paste0("a= ", a))
+  while(exp(a*(hamiltonian(theta,
+                           r, mod, g, dg) -hamiltonian(theta_r_prop$theta,
+                             theta_r_prop$r, mod, g, dg))) > 2^-a)
   {
+    print(paste0(epsilon/init_eps, "-> alpha: ",
+                 exp(a*(hamiltonian(theta, r, mod, g, dg) -
+                          hamiltonian(theta_r_prop$theta,
+                                      theta_r_prop$r, mod, g, dg)))))
     epsilon <- 2^a*epsilon
-    theta_r_prop <- leapfrog(mod, theta, current_r, epsilon, g, dg)
+    theta_r_prop <- leapfrog(mod, theta, r, epsilon, g, dg)
   }
+  print(paste0(epsilon/init_eps, "-> alpha: ",
+               exp(a*(hamiltonian(theta, r, mod, g, dg) -
+                        hamiltonian(theta_r_prop$theta,
+                                    theta_r_prop$r, mod, g, dg)))))
+  print(paste0("eps= ",epsilon, " --- (theta,r) = [", theta_r_prop$theta, ", ", theta_r_prop$r, "]"))
   epsilon
 }
 
@@ -129,61 +138,67 @@ g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
 theta <- log(unlist(pars))
 plot(theta["beta"],theta["gamma"],
-     xlim=c(theta["beta"]-.4,theta["beta"]+.4),
-     ylim=c(theta["gamma"]-.4,theta["gamma"]+.4), pch=19, col="red")
+     xlim=c(theta["beta"]-2,theta["beta"]+2),
+     ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
 epsilon <- find_epsilon1(mod, theta, g, dg, 0.000001)
-for(i in 1:100){
-  r <- rnorm(length(theta),0,1)
-  u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-  tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
-  print(tree$n_prop)
-}
+#epsilon <- 0.001
+# for(i in 1:100){
+#   r <- rnorm(length(theta),0,1)
+#   u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
+#   tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
+#   print(tree$n_prop)
+# }
 
 
-
-theta0 <- log(unlist(pars))
-M <- 1000
-M_adapt <- 100
-D_max <- 1000
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)/5
-mu <- log(10*epsilon0)
-theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
-colnames(theta_m) <- names(theta0)
-
-tt <- rbind(theta0 ,theta0 ,theta0 )
-
-for(i in 1:M)
-{
-  r0 <- rnorm(length(theta),0,1)
-  u <- runif(1)*exp(hamiltonian(theta_m[i,], r0, mod, g, dg))
-  theta_minus <- theta_m[i,]
-  theta_plus <- theta_m[i,]
-  r_minus <- r0
-  r_plus <- r0
-  j <- 0
-  theta_prop <- theta_m[i,]
-  n <- 1
-  s <- TRUE
-  while(s){
-    v <- sample(c(-1,1),1)
-    if(v==-1){
-      tree_list <- build_tree(theta_minus, r_minus,
-                                     u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
-    } else {
-      tree_list <- build_tree(theta_plus, r_plus,
-                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
-    }
-    #browser()
-    if(tree_list$s_prop)
-      if(runif(1)<min(1,tree_list$n_prop/n))
-        theta_m[i+1,] <- tree_list$theta_prop
-    n <- n + tree_list$n_prop
-    s <- tree_list$s_prop &
-      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
-      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
-    j <- j+1
-  }
-}
+# plot(theta["beta"],theta["gamma"],
+#      xlim=c(theta["beta"]-3,theta["beta"]+2),
+#      ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
+#
+# theta0 <- log(unlist(pars))
+# M <- 1000
+# M_adapt <- 100
+# D_max <- 1000
+# epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
+# #epsilon0 <- 0.005
+# mu <- log(10*epsilon0)
+# theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
+# colnames(theta_m) <- names(theta0)
+#
+# tt <- rbind(theta0 ,theta0 ,theta0 )
+#
+# for(i in 1:M)
+# {
+#   r0 <- rnorm(length(theta),0,1)
+#   print(r0)
+#   u <- runif(1)*exp(hamiltonian(theta_m[i,], r0, mod, g, dg))
+#   theta_minus <- theta_m[i,]
+#   theta_plus <- theta_m[i,]
+#   r_minus <- r0
+#   r_plus <- r0
+#   j <- 0
+#   theta_prop <- theta_m[i,]
+#   n <- 1
+#   s <- TRUE
+#   while(s){
+#     v <- sample(c(-1,1),1)
+#     if(v==-1){
+#       tree_list <- build_tree(theta_minus, r_minus,
+#                                      u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+#     } else {
+#       tree_list <- build_tree(theta_plus, r_plus,
+#                               u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+#     }
+#     #browser()
+#     if(tree_list$s_prop)
+#       if(runif(1)<min(1,tree_list$n_prop/n))
+#         theta_m[i+1,] <- tree_list$theta_prop
+#     n <- n + tree_list$n_prop
+#     s <- tree_list$s_prop &
+#       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
+#       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
+#     j <- j+1
+#   }
+# }
 
 
 
