@@ -36,15 +36,15 @@ proposal_matrix <- diag(0.1, 3)
 proposal_matrix <- matrix(c(0.0002123093,0.0001906685,-0.0270819864,0.0001906685,0.0001908083,-0.0211008465,-0.0270819864,-0.0211008465,5.30085662), ncol=3)
 mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma, I0 = I0),
                                            proposal_matrix)
-n_steps <- 5000
+n_steps <- 500
 control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
-plot(log(pmcmc_run$pars[,1]),log(pmcmc_run$pars[,2]))
-hist(pmcmc_run$probabilities[-(1:500),2])
+plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]))
+hist(pmcmc_run$probabilities[-(1:50),2])
 
 # Set up the data to attach to dust model
 d <- dust::dust_data(incidence)
@@ -65,8 +65,8 @@ compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
   pars <- trans(theta)
   mod$update_state(pars, time = t)
   res_adj <- mod$run_adjoint()
-  list(log_likelihood = -res_adj$log_likelihood,
-       gradient = -pd_trans(theta)*res_adj$gradient)
+  list(log_likelihood = res_adj$log_likelihood,
+       gradient = pd_trans(theta)*res_adj$gradient)
 }
 
 hamiltonian <- function(theta, r, mod, g, dg){
@@ -78,9 +78,11 @@ hamiltonian <- function(theta, r, mod, g, dg){
 # perform 1 leafrog integration of step epsilon
 leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   # initialise to the current value of theta and r
-  print(current_theta)
-  print(current_r)
-  print(epsilon)
+  #print(current_theta)
+  #print(current_r)
+  print(paste0("H=",hamiltonian(current_theta, current_r, mod, g, dg)))
+  print(paste0("K=", current_r%*%current_r/2))
+  #print(epsilon)
   theta <- current_theta
   r <- current_r
   # Make a half step for momentum
@@ -89,6 +91,8 @@ leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   theta <- theta + epsilon * r
   # Make a half step for momentum
   r <- r + epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
+  print(paste0("H=",hamiltonian(current_theta, current_r, mod, g, dg)))
+  print(paste0("K=", current_r%*%current_r/2))
   return(list(theta = theta, r = r))
 }
 
@@ -181,70 +185,71 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
 g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
 theta <- log(unlist(pars))
-plot(theta["beta"],theta["gamma"],
-     xlim=c(theta["beta"]-2,theta["beta"]+2),
-     ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
-epsilon <- find_epsilon1(mod, theta, g, dg, 0.000001)
-for(i in 1:100){
-  r <- rnorm(length(theta),0,1)
-  u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-  tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
-  print(tree$n_prop)
-}
-
-theta <- c(-106.30584, 100.80329, -21.51924)
-r <- rnorm(length(theta),0,1)
-leapfrog(mod, theta, r, epsilon, g, dg)
-
 # plot(theta["beta"],theta["gamma"],
-#      xlim=c(theta["beta"]-3,theta["beta"]+2),
+#      xlim=c(theta["beta"]-2,theta["beta"]+2),
 #      ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
-#
-# theta0 <- log(unlist(pars))
-# M <- 1000
-# M_adapt <- 100
-# D_max <- 1000
-# epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
-# #epsilon0 <- 0.005
-# mu <- log(10*epsilon0)
-# theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
-# colnames(theta_m) <- names(theta0)
-#
-# tt <- rbind(theta0 ,theta0 ,theta0 )
-#
-# for(i in 1:M)
-# {
-#   r0 <- rnorm(length(theta),0,1)
-#   print(r0)
-#   u <- runif(1)*exp(hamiltonian(theta_m[i,], r0, mod, g, dg))
-#   theta_minus <- theta_m[i,]
-#   theta_plus <- theta_m[i,]
-#   r_minus <- r0
-#   r_plus <- r0
-#   j <- 0
-#   theta_prop <- theta_m[i,]
-#   n <- 1
-#   s <- TRUE
-#   while(s){
-#     v <- sample(c(-1,1),1)
-#     if(v==-1){
-#       tree_list <- build_tree(theta_minus, r_minus,
-#                                      u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
-#     } else {
-#       tree_list <- build_tree(theta_plus, r_plus,
-#                               u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
-#     }
-#     #browser()
-#     if(tree_list$s_prop)
-#       if(runif(1)<min(1,tree_list$n_prop/n))
-#         theta_m[i+1,] <- tree_list$theta_prop
-#     n <- n + tree_list$n_prop
-#     s <- tree_list$s_prop &
-#       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
-#       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
-#     j <- j+1
-#   }
+# plot(log(pmcmc_run$pars[-(1:500),1]),log(pmcmc_run$pars[-(1:500),2]),
+#      xlim = c(-2.5,-1), ylim = c(-3, -1.5),
+#      pch=19, col="#2244ff22")
+# epsilon <- find_epsilon1(mod, theta, g, dg, 0.000001)
+# for(i in 1:100){
+#   r <- rnorm(length(theta),0,1)
+#   u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
+#   tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
+#   print(tree$n_prop)
 # }
+
+
+
+plot(theta["beta"],theta["gamma"],
+     xlim=c(theta["beta"]-3,theta["beta"]+2),
+     ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
+
+theta0 <- log(unlist(pars))
+M <- 1000
+M_adapt <- 100
+D_max <- 1000
+epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
+#epsilon0 <- 0.005
+mu <- log(10*epsilon0)
+theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
+colnames(theta_m) <- names(theta0)
+
+tt <- rbind(theta0 ,theta0 ,theta0 )
+
+for(i in 1:M)
+{
+  r0 <- rnorm(length(theta),0,1)
+  print(r0)
+  u <- runif(1)*exp(hamiltonian(theta_m[i,], r0, mod, g, dg))
+  theta_minus <- theta_m[i,]
+  theta_plus <- theta_m[i,]
+  r_minus <- r0
+  r_plus <- r0
+  j <- 0
+  theta_prop <- theta_m[i,]
+  n <- 1
+  s <- TRUE
+  while(s){
+    v <- sample(c(-1,1),1)
+    if(v==-1){
+      tree_list <- build_tree(theta_minus, r_minus,
+                                     u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+    } else {
+      tree_list <- build_tree(theta_plus, r_plus,
+                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+    }
+    #browser()
+    if(tree_list$s_prop)
+      if(runif(1)<min(1,tree_list$n_prop/n))
+        theta_m[i+1,] <- tree_list$theta_prop
+    n <- n + tree_list$n_prop
+    s <- tree_list$s_prop &
+      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
+      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
+    j <- j+1
+  }
+}
 
 
 
