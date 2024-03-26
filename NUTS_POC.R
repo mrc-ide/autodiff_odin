@@ -202,11 +202,11 @@ theta <- log(unlist(pars))
 
 
 plot(theta["beta"],theta["gamma"],
-     xlim=c(theta["beta"]-3,theta["beta"]+2),
-     ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
+     xlim=c(theta["beta"]-5,theta["beta"]+4),
+     ylim=c(theta["gamma"]-5,theta["gamma"]+4), pch=19, col="red")
 
 theta0 <- log(unlist(pars))
-M <- 1000
+M <- 500
 M_adapt <- 100
 D_max <- 1000
 epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
