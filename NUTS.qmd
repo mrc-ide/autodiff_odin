@@ -1,11 +1,27 @@
-# remotes::install_github("mrc-ide/odin@mrc-4358", upgrade = FALSE, force = TRUE)
-# remotes::install_github("mrc-ide/odin.dust@mrc-4359", upgrade = FALSE, force = TRUE)
-# remotes::install_github("mrc-ide/dust@mrc-4307", upgrade = FALSE, force = TRUE)
-# remotes::install_github("mrc-ide/mcstate", upgrade = FALSE, force = TRUE)
+---
+title: "NUTS, AutoDiff and odin"
+author: "Marc Baguelin"
+format:
+  revealjs:
+    footer: "[NUTS, AutoDiff and odin](https://www.imperial.ac.uk/people/m.baguelin)"
+    slide-number: c/t
+bibliography: papers_autodiff.bib
+---
 
-# Create generator for dust model
+# Setting up model
+
+## Set up
+
+Compile SIR model with autodiff set in
+```{r}
+#| echo: TRUE
+#| # Create generator for dust model
 gen <- odin.dust::odin_dust("models/sir_adjoint.R")
+```
 
+## Set up the particle filter
+```{r}
+#| echo: TRUE
 # Create dataset
 incidence <- read.csv("data/incidence.csv")
 incidence <- data.frame(
@@ -25,8 +41,12 @@ filter <- mcstate::particle_deterministic$new(data=pf_data, gen, compare = NULL)
 
 # Running the filter for likelihood estimation
 filter$run(pars = pars)
+```
 
-# Run mcmc
+## Run mcmc
+
+```{r, cache=TRUE}
+#| echo: TRUE
 beta <- mcstate::pmcmc_parameter("beta", 0.2, min = 0)
 gamma <- mcstate::pmcmc_parameter("gamma", 0.1, min = 0, prior = function(p)
   dgamma(p, shape = 1, scale = 0.2, log = TRUE))
@@ -43,12 +63,19 @@ control <- mcstate::pmcmc_control(
   save_trajectories = TRUE,
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+```
+
+## Plot result
+```{r}
 plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
      xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-2,2),
      ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-2,2),
      col="red")
-#hist(pmcmc_run$probabilities[-(1:50),2])
+```
 
+## Run gradient
+```{r run-gradient}
+#| echo: TRUE
 # Set up the data to attach to dust model
 d <- dust::dust_data(incidence)
 
@@ -58,12 +85,19 @@ mod$set_data(d)
 
 # Running the likelihood evaluation using the odin model, compare and data
 mod$run_adjoint()
+```
 
+## This gives same result that simulating the model
+```{r}
 # Simulating the model and calculating the likelihood based on this
 mod$update_state(time = 0)
 y <- mod$simulate(c(1:100)*4)
 sum(dpois(x = incidence$cases_observed, lambda = y[mod$info()$index$cases_inc,1,], log = TRUE))
+```
 
+## Find epsilon
+
+```{r}
 compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
   pars <- trans(theta)
   mod$update_state(pars, time = t)
@@ -99,11 +133,6 @@ leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   return(list(theta = theta, r = r))
 }
 
-# function from the NUTS paper
-# the NUTS paper fix the initial epsilon value to 1,
-# in practice this can lead to very big leaps
-# here it is given by user
-# and generate NaN
 find_epsilon1 <- function(mod, theta, g, dg, init_eps){
   #browser()
   epsilon <- init_eps
@@ -132,90 +161,34 @@ find_epsilon1 <- function(mod, theta, g, dg, init_eps){
   epsilon
 }
 
-build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, delta = 1000)
-{
-  #browser()
-  if(j==0) {
-    #browser()
-    # base case, one leapfrog in direction v
-    theta_r_prop <- leapfrog(mod, theta, r, v*epsilon, g, dg)
-    H_prop <- hamiltonian(theta_r_prop$theta, theta_r_prop$r, mod, g, dg)
-    H_0 <- hamiltonian(theta_0, r_0, mod, g, dg)
-    n <- as.integer(u <= exp(-H_prop))
-    lines(c(theta["beta"],theta_r_prop$theta["beta"]),c(theta["gamma"],theta_r_prop$theta["gamma"]),col=grey(.6))
-    points(theta_r_prop$theta["beta"],theta_r_prop$theta["gamma"], col=grey(.6))
-    s <- u < exp(delta - H_prop)
-    return(list(theta_minus = theta_r_prop$theta,
-           r_minus = theta_r_prop$r,
-           theta_plus = theta_r_prop$theta,
-           r_plus = theta_r_prop$r,
-           theta_prop = theta_r_prop$theta,
-           n_prop = n,
-           s_prop = s,
-           alpha = min(1, exp(H_0-H_prop)),
-           n_alpha = 1)
-    )
-  } else { #j>0
-    result_list <- build_tree(theta, r, u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
-    #browser()
-    if(result_list$s_prop){ # continue the tree unless stop condition is reached
-      if(v==-1){
-        alternative_list <- build_tree(result_list$theta_minus, result_list$r_minus,
-                               u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
-        result_list$theta_minus <- alternative_list$theta_minus
-        result_list$r_minus <- alternative_list$r_minus
-      } else { #v==1
-        alternative_list <- build_tree(result_list$theta_plus, result_list$r_plus,
-                               u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
-        result_list$theta_plus <- alternative_list$theta_plus
-        result_list$r_plus <- alternative_list$r_plus
-      }
-      sum_n_prop <- result_list$n_prop+alternative_list$n_prop
-      if(sum_n_prop > 0)
-        if(runif(1)<alternative_list$n_prop/sum_n_prop)
-          result_list$theta_prop <- alternative_list$theta_prop
-      result_list$alpha <- result_list$alpha + alternative_list$alpha
-      result_list$n_alpha <- result_list$n_alpha + alternative_list$n_alpha
-      result_list$s_prop <- alternative_list$s_prop &
-        ((result_list$theta_plus-result_list$theta_minus)%*%result_list$r_minus >= 0) &
-        ((result_list$theta_plus-result_list$theta_minus)%*%result_list$r_plus >= 0)
-      result_list$n_prop <- sum_n_prop
-    }
-    return(result_list)
-  }
-}
-
-# plot(theta["beta"],theta["gamma"],
-#      xlim=c(theta["beta"]-2,theta["beta"]+2),
-#      ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
-# plot(log(pmcmc_run$pars[-(1:500),1]),log(pmcmc_run$pars[-(1:500),2]),
-#      xlim = c(-2.5,-1), ylim = c(-3, -1.5),
-#      pch=19, col="#2244ff22")
-# epsilon <- find_epsilon1(mod, theta, g, dg, 0.000001)
-# for(i in 1:100){
-#   r <- rnorm(length(theta),0,1)
-#   u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-#   tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
-#   print(tree$n_prop)
-# }
-
-#Test the gradient function
 g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
 theta <- log(unlist(pars))
+epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
+```
+
+## Gradient descent
+
+```{r gradient-descent}
+#Test the gradient function
+
 plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
      xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-1,1),
      ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-1,1),
      col="red")
 points(theta[1], theta[2], pch=19, col="blue")
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
+
 for(i in 1:10000)
 {
   theta_next <- theta + epsilon0/1000 * compute_gradient(mod, theta, g, dg)$gradient
   lines(c(theta[1],theta_next[1]),c(theta[2],theta_next[2]))
   theta <- theta_next
 }
+```
 
+## HMC
+
+```{r}
 #Test HMC is working with leapfrog integrator
 g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
@@ -225,7 +198,6 @@ plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
      ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-1,1),
      col="red")
 points(current_theta[1], current_theta[2], pch=19, col="blue")
-epsilon0 <- find_epsilon1(mod, current_theta, g, dg, 0.0001)
 
 h_seq <- NULL
 K_seq <- NULL
@@ -253,65 +225,17 @@ for(k in 1:2000){
   K_seq <- c(K_seq, sum(current_r^2) / 2)
   U_seq <- c(U_seq, - compute_gradient(mod, current_theta, g, dg)$log_likelihood)
 }
+```
 
+## HMC is a jigged descent
 
+::: {.incremental}
+- Far from the mode, gradient descent dominates the dynamics, because potential energy is high
+- Near the mode, random momentum generation allows to explore the distribution
+:::
 
-#plot(theta["beta"],theta["gamma"],
-#     xlim=c(theta["beta"]-5,theta["beta"]+4),
-#     ylim=c(theta["gamma"]-5,theta["gamma"]+4), pch=19, col="red")
+## Leapfrog descent
 
-plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
-     xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-1,1),
-     ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-1,1),
-     col="red")
-points(current_theta[1], current_theta[2], pch=19, col="blue")
+```{r}
 
-theta0 <- log(unlist(pars))
-M <- 5000
-M_adapt <- 100
-D_max <- 1000
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
-#epsilon0 <- 0.005
-mu <- log(10*epsilon0)/10
-theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
-colnames(theta_m) <- names(theta0)
-
-tt <- rbind(theta0 ,theta0 ,theta0 )
-
-for(i in 1:M)
-{
-  r0 <- rnorm(length(theta),0,1)
-  print(r0)
-  u <- runif(1)*exp(-hamiltonian(theta_m[i,], r0, mod, g, dg))
-  theta_minus <- theta_m[i,]
-  theta_plus <- theta_m[i,]
-  r_minus <- r0
-  r_plus <- r0
-  j <- 0
-  theta_prop <- theta_m[i,]
-  n <- 1
-  s <- TRUE
-  while(s){
-    v <- sample(c(-1,1),1)
-    if(v==-1){
-      tree_list <- build_tree(theta_minus, r_minus,
-                                     u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
-    } else {
-      tree_list <- build_tree(theta_plus, r_plus,
-                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
-    }
-    #browser()
-    if(tree_list$s_prop)
-      if(runif(1)<min(1,tree_list$n_prop/n))
-        theta_m[i+1,] <- tree_list$theta_prop
-    n <- n + tree_list$n_prop
-    s <- tree_list$s_prop &
-      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
-      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
-    j <- j+1
-  }
-  theta_m[i+1,] <- tree_list$theta_prop
-}
-
-
-
+```
