@@ -135,6 +135,7 @@ find_epsilon1 <- function(mod, theta, g, dg, init_eps){
 build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, delta = 1000)
 {
   #browser()
+  #print(j)
   if(j==0) {
     #browser()
     # base case, one leapfrog in direction v
@@ -142,8 +143,8 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
     H_prop <- hamiltonian(theta_r_prop$theta, theta_r_prop$r, mod, g, dg)
     H_0 <- hamiltonian(theta_0, r_0, mod, g, dg)
     n <- as.integer(u <= exp(-H_prop))
-    lines(c(theta["beta"],theta_r_prop$theta["beta"]),c(theta["gamma"],theta_r_prop$theta["gamma"]),col=grey(.6))
-    points(theta_r_prop$theta["beta"],theta_r_prop$theta["gamma"], col=grey(.6))
+    #lines(c(theta["beta"],theta_r_prop$theta["beta"]),c(theta["gamma"],theta_r_prop$theta["gamma"]),col=grey(.6))
+    #points(theta_r_prop$theta["beta"],theta_r_prop$theta["gamma"], col=grey(.6))
     s <- u < exp(delta - H_prop)
     return(list(theta_minus = theta_r_prop$theta,
            r_minus = theta_r_prop$r,
@@ -261,16 +262,16 @@ for(k in 1:2000){
 #     ylim=c(theta["gamma"]-5,theta["gamma"]+4), pch=19, col="red")
 
 plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
-     xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-1,1),
-     ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-1,1),
+     xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-2,2),
+     ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-2,2),
      col="red")
 points(current_theta[1], current_theta[2], pch=19, col="blue")
 
 theta0 <- log(unlist(pars))
-M <- 5000
+M <- 50000
 M_adapt <- 100
 D_max <- 1000
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
+epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)/2
 #epsilon0 <- 0.005
 mu <- log(10*epsilon0)/10
 theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
@@ -281,7 +282,7 @@ tt <- rbind(theta0 ,theta0 ,theta0 )
 for(i in 1:M)
 {
   r0 <- rnorm(length(theta),0,1)
-  print(r0)
+  #print(r0)
   u <- runif(1)*exp(-hamiltonian(theta_m[i,], r0, mod, g, dg))
   theta_minus <- theta_m[i,]
   theta_plus <- theta_m[i,]
@@ -289,6 +290,7 @@ for(i in 1:M)
   r_plus <- r0
   j <- 0
   theta_prop <- theta_m[i,]
+  theta_m[i+1,] <- theta_m[i,]
   n <- 1
   s <- TRUE
   while(s){
@@ -310,8 +312,9 @@ for(i in 1:M)
       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
     j <- j+1
   }
-  theta_m[i+1,] <- tree_list$theta_prop
 }
+
+points(theta_m[,1], theta_m[,2], col="orange", pch=19)
 
 
 
