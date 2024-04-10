@@ -316,5 +316,61 @@ for(i in 1:M)
 
 points(theta_m[,1], theta_m[,2], col="orange", pch=19)
 
+theta0 <- log(unlist(pars))
+M <- 50
+M_adapt <- 100
+D_max <- 1000
+#epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)/10
+#epsilon0 <- 0.005
+epsilon_seq <- seq(0.005,0.08, length.out=10)
+time.taken <- rep(-1,length(epsilon_seq))
+mu <- log(10*epsilon0)/10
+theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
+colnames(theta_m) <- names(theta0)
+
+tt <- rbind(theta0 ,theta0 ,theta0 )
+
+for(l in seq_along(epsilon_seq)){
+  start.time <- Sys.time()
+  epsilon0 <- epsilon_seq[l]
+for(i in 1:M)
+{
+  r0 <- rnorm(length(theta),0,1)
+  #print(r0)
+  u <- runif(1)*exp(-hamiltonian(theta_m[i,], r0, mod, g, dg))
+  theta_minus <- theta_m[i,]
+  theta_plus <- theta_m[i,]
+  r_minus <- r0
+  r_plus <- r0
+  j <- 0
+  theta_prop <- theta_m[i,]
+  theta_m[i+1,] <- theta_m[i,]
+  n <- 1
+  s <- TRUE
+  while(s){
+    v <- sample(c(-1,1),1)
+    if(v==-1){
+      tree_list <- build_tree(theta_minus, r_minus,
+                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+    } else {
+      tree_list <- build_tree(theta_plus, r_plus,
+                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+    }
+    #browser()
+    if(tree_list$s_prop)
+      if(runif(1)<min(1,tree_list$n_prop/n))
+        theta_m[i+1,] <- tree_list$theta_prop
+    n <- n + tree_list$n_prop
+    s <- tree_list$s_prop &
+      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
+      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
+    j <- j+1
+  }
+}
+
+end.time <- Sys.time()
+time.taken[l] <- round(end.time - start.time,4)
+
+}
 
 
