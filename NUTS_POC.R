@@ -81,11 +81,6 @@ hamiltonian <- function(theta, r, mod, g, dg){
 # perform 1 leafrog integration of step epsilon
 leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   # initialise to the current value of theta and r
-  #print(current_theta)
-  #print(current_r)
-  #print(paste0("H=",hamiltonian(current_theta, current_r, mod, g, dg)))
-  #print(paste0("K=", current_r%*%current_r/2))
-  #print(epsilon)
   theta <- current_theta
   r <- current_r
   # Make a half step for momentum
@@ -94,8 +89,6 @@ leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   theta <- theta + epsilon * r
   # Make a half step for momentum
   r <- r + epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
-  #print(paste0("H=",hamiltonian(current_theta, current_r, mod, g, dg)))
-  #print(paste0("K=", current_r%*%current_r/2))
   return(list(theta = theta, r = r))
 }
 
@@ -105,7 +98,6 @@ leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
 # here it is given by user
 # and generate NaN
 find_epsilon1 <- function(mod, theta, g, dg, init_eps){
-  #browser()
   epsilon <- init_eps
   r <- rnorm(length(theta),0,1)
   theta_r_prop <- leapfrog(mod, theta, r, epsilon, g, dg)
@@ -117,27 +109,15 @@ find_epsilon1 <- function(mod, theta, g, dg, init_eps){
                            r, mod, g, dg) -hamiltonian(theta_r_prop$theta,
                              theta_r_prop$r, mod, g, dg))) > 2^-a)
   {
-    print(paste0(epsilon/init_eps, "-> alpha: ",
-                 exp(a*(hamiltonian(theta, r, mod, g, dg) -
-                          hamiltonian(theta_r_prop$theta,
-                                      theta_r_prop$r, mod, g, dg)))))
     epsilon <- 2^a*epsilon
     theta_r_prop <- leapfrog(mod, theta, r, epsilon, g, dg)
   }
-  print(paste0(epsilon/init_eps, "-> alpha: ",
-               exp(a*(hamiltonian(theta, r, mod, g, dg) -
-                        hamiltonian(theta_r_prop$theta,
-                                    theta_r_prop$r, mod, g, dg)))))
-  print(paste0("eps= ",epsilon, " --- (theta,r) = [", theta_r_prop$theta, ", ", theta_r_prop$r, "]"))
   epsilon
 }
 
 build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, delta = 1000)
 {
-  #browser()
-  #print(j)
   if(j==0) {
-    #browser()
     # base case, one leapfrog in direction v
     theta_r_prop <- leapfrog(mod, theta, r, v*epsilon, g, dg)
     H_prop <- hamiltonian(theta_r_prop$theta, theta_r_prop$r, mod, g, dg)
@@ -158,7 +138,6 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
     )
   } else { #j>0
     result_list <- build_tree(theta, r, u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
-    #browser()
     if(result_list$s_prop){ # continue the tree unless stop condition is reached
       if(v==-1){
         alternative_list <- build_tree(result_list$theta_minus, result_list$r_minus,
@@ -186,81 +165,6 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
   }
 }
 
-# plot(theta["beta"],theta["gamma"],
-#      xlim=c(theta["beta"]-2,theta["beta"]+2),
-#      ylim=c(theta["gamma"]-2,theta["gamma"]+2), pch=19, col="red")
-# plot(log(pmcmc_run$pars[-(1:500),1]),log(pmcmc_run$pars[-(1:500),2]),
-#      xlim = c(-2.5,-1), ylim = c(-3, -1.5),
-#      pch=19, col="#2244ff22")
-# epsilon <- find_epsilon1(mod, theta, g, dg, 0.000001)
-# for(i in 1:100){
-#   r <- rnorm(length(theta),0,1)
-#   u <- runif(1)*exp(hamiltonian(theta, r, mod, g, dg))
-#   tree <- build_tree(theta, r, u, v=1, j=12, epsilon/10, theta, r, mod, g, dg, delta = 1000)
-#   print(tree$n_prop)
-# }
-
-#Test the gradient function
-g <- function(theta) {as.list(exp(theta))}
-dg <- function(theta) {exp(theta)}
-theta <- log(unlist(pars))
-plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
-     xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-1,1),
-     ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-1,1),
-     col="red")
-points(theta[1], theta[2], pch=19, col="blue")
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
-for(i in 1:10000)
-{
-  theta_next <- theta + epsilon0/1000 * compute_gradient(mod, theta, g, dg)$gradient
-  lines(c(theta[1],theta_next[1]),c(theta[2],theta_next[2]))
-  theta <- theta_next
-}
-
-#Test HMC is working with leapfrog integrator
-g <- function(theta) {as.list(exp(theta))}
-dg <- function(theta) {exp(theta)}
-current_theta <- log(unlist(pars))
-plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
-     xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-1,1),
-     ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-1,1),
-     col="red")
-points(current_theta[1], current_theta[2], pch=19, col="blue")
-epsilon0 <- find_epsilon1(mod, current_theta, g, dg, 0.0001)
-
-h_seq <- NULL
-K_seq <- NULL
-U_seq <- NULL
-L <- 3
-for(k in 1:2000){
-  current_r <- rnorm(length(theta),0,1)
-  theta <- current_theta
-  r <- current_r
-  for(i in 1:L)
-  {
-    theta_r_prop <- leapfrog(mod, theta, r, epsilon0/5, g, dg)
-    lines(c(theta[1],theta_r_prop$theta[1]),c(theta[2],theta_r_prop$theta[2]))
-    theta <- theta_r_prop$theta
-    r <- theta_r_prop$r
-  }
-  current_U <- -compute_gradient(mod, current_theta, g, dg)$log_likelihood
-  current_K <- sum(current_r^2) / 2
-  proposed_U <- -compute_gradient(mod, theta, g, dg)$log_likelihood
-  proposed_K <- sum(r^2) / 2
-  #browser()
-  if (log(runif(1)) < current_U-proposed_U+current_K-proposed_K)
-    current_theta <- theta # accept
-  h_seq <- c(h_seq,hamiltonian(current_theta, current_r, mod, g, dg))
-  K_seq <- c(K_seq, sum(current_r^2) / 2)
-  U_seq <- c(U_seq, - compute_gradient(mod, current_theta, g, dg)$log_likelihood)
-}
-
-
-
-#plot(theta["beta"],theta["gamma"],
-#     xlim=c(theta["beta"]-5,theta["beta"]+4),
-#     ylim=c(theta["gamma"]-5,theta["gamma"]+4), pch=19, col="red")
-
 plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
      xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-2,2),
      ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-2,2),
@@ -268,7 +172,7 @@ plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
 points(current_theta[1], current_theta[2], pch=19, col="blue")
 
 theta0 <- log(unlist(pars))
-M <- 50000
+M <- 5000
 M_adapt <- 100
 D_max <- 1000
 epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)/2
@@ -277,100 +181,42 @@ mu <- log(10*epsilon0)/10
 theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
 colnames(theta_m) <- names(theta0)
 
-tt <- rbind(theta0 ,theta0 ,theta0 )
-
-for(i in 1:M)
-{
+NUTS_step <- function(theta, epsilon0, mod, g, dg, D_max){
+  theta_prop <- theta
   r0 <- rnorm(length(theta),0,1)
-  #print(r0)
-  u <- runif(1)*exp(-hamiltonian(theta_m[i,], r0, mod, g, dg))
-  theta_minus <- theta_m[i,]
-  theta_plus <- theta_m[i,]
-  r_minus <- r0
-  r_plus <- r0
+  u <- runif(1)*exp(-hamiltonian(theta, r0, mod, g, dg))
+  tree_list <- list(theta_minus = theta,
+                    r_minus = r0,
+                    theta_plus = theta,
+                    r_plus = r0
+  )
   j <- 0
-  theta_prop <- theta_m[i,]
-  theta_m[i+1,] <- theta_m[i,]
   n <- 1
   s <- TRUE
   while(s){
     v <- sample(c(-1,1),1)
     if(v==-1){
-      tree_list <- build_tree(theta_minus, r_minus,
-                                     u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+      tree_list <- build_tree(tree_list$theta_minus, tree_list$r_minus,
+                              u, v, j, epsilon0, theta, r0, mod, g, dg, D_max)
     } else {
-      tree_list <- build_tree(theta_plus, r_plus,
-                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+      tree_list <- build_tree(tree_list$theta_plus, tree_list$r_plus,
+                              u, v, j, epsilon0, theta, r0, mod, g, dg, D_max)
     }
-    #browser()
     if(tree_list$s_prop)
       if(runif(1)<min(1,tree_list$n_prop/n))
-        theta_m[i+1,] <- tree_list$theta_prop
+        theta_prop <- tree_list$theta_prop
     n <- n + tree_list$n_prop
     s <- tree_list$s_prop &
       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
     j <- j+1
   }
+  list(theta_prop=theta_prop, j=j, s=s, n=n, theta_minus=tree_list$theta_minus, theta_plus=tree_list$theta_plus)
 }
 
-points(theta_m[,1], theta_m[,2], col="orange", pch=19)
-
-theta0 <- log(unlist(pars))
-M <- 50
-M_adapt <- 100
-D_max <- 1000
-#epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)/10
-#epsilon0 <- 0.005
-epsilon_seq <- seq(0.005,0.08, length.out=10)
-time.taken <- rep(-1,length(epsilon_seq))
-mu <- log(10*epsilon0)/10
-theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
-colnames(theta_m) <- names(theta0)
-
-tt <- rbind(theta0 ,theta0 ,theta0 )
-
-for(l in seq_along(epsilon_seq)){
-  start.time <- Sys.time()
-  epsilon0 <- epsilon_seq[l]
 for(i in 1:M)
 {
-  r0 <- rnorm(length(theta),0,1)
-  #print(r0)
-  u <- runif(1)*exp(-hamiltonian(theta_m[i,], r0, mod, g, dg))
-  theta_minus <- theta_m[i,]
-  theta_plus <- theta_m[i,]
-  r_minus <- r0
-  r_plus <- r0
-  j <- 0
-  theta_prop <- theta_m[i,]
-  theta_m[i+1,] <- theta_m[i,]
-  n <- 1
-  s <- TRUE
-  while(s){
-    v <- sample(c(-1,1),1)
-    if(v==-1){
-      tree_list <- build_tree(theta_minus, r_minus,
-                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
-    } else {
-      tree_list <- build_tree(theta_plus, r_plus,
-                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
-    }
-    #browser()
-    if(tree_list$s_prop)
-      if(runif(1)<min(1,tree_list$n_prop/n))
-        theta_m[i+1,] <- tree_list$theta_prop
-    n <- n + tree_list$n_prop
-    s <- tree_list$s_prop &
-      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
-      ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
-    j <- j+1
-  }
+  res <- NUTS_step(theta_m[i,], 0.01, mod, g, dg, D_max)
+  theta_m[i+1,] <- res$theta_prop
 }
-
-end.time <- Sys.time()
-time.taken[l] <- round(end.time - start.time,4)
-
-}
-
 
