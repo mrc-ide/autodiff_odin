@@ -104,7 +104,6 @@ find_epsilon1 <- function(mod, theta, g, dg, init_eps){
   if(exp(hamiltonian(theta, r, mod, g, dg)-
          hamiltonian(theta_r_prop$theta,
                      theta_r_prop$r, mod, g, dg)) > 0.5) a <- 1 else a <- -1
-  print(paste0("a= ", a))
   while(exp(a*(hamiltonian(theta,
                            r, mod, g, dg) -hamiltonian(theta_r_prop$theta,
                              theta_r_prop$r, mod, g, dg))) > 2^-a)
@@ -175,8 +174,7 @@ theta0 <- log(unlist(pars))
 M <- 5000
 M_adapt <- 100
 D_max <- 1000
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)/2
-#epsilon0 <- 0.005
+epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
 mu <- log(10*epsilon0)/10
 theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
 colnames(theta_m) <- names(theta0)

@@ -12,15 +12,15 @@ bibliography: papers_autodiff.bib
 
 ## Set up
 
-Compile SIR model with autodiff set in
-```{r}
+  Compile SIR model with autodiff set in
+```{r compile-model}
 #| echo: TRUE
 #| # Create generator for dust model
 gen <- odin.dust::odin_dust("models/sir_adjoint.R")
 ```
 
 ## Set up the particle filter
-```{r}
+```{r set-up-particle-filter}
 #| echo: TRUE
 # Create dataset
 incidence <- read.csv("data/incidence.csv")
@@ -45,7 +45,7 @@ filter$run(pars = pars)
 
 ## Run mcmc
 
-```{r, cache=TRUE}
+```{r run-mcmc, cache=TRUE}
 #| echo: TRUE
 beta <- mcstate::pmcmc_parameter("beta", 0.2, min = 0)
 gamma <- mcstate::pmcmc_parameter("gamma", 0.1, min = 0, prior = function(p)
@@ -66,7 +66,7 @@ pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 ```
 
 ## Plot result
-```{r}
+```{r plot-mcmc}
 plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
      xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-2,2),
      ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-2,2),
@@ -97,7 +97,7 @@ sum(dpois(x = incidence$cases_observed, lambda = y[mod$info()$index$cases_inc,1,
 
 ## Find epsilon
 
-```{r}
+```{r useful-functions}
 compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
   pars <- trans(theta)
   mod$update_state(pars, time = t)
@@ -115,11 +115,6 @@ hamiltonian <- function(theta, r, mod, g, dg){
 # perform 1 leafrog integration of step epsilon
 leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   # initialise to the current value of theta and r
-  #print(current_theta)
-  #print(current_r)
-  #print(paste0("H=",hamiltonian(current_theta, current_r, mod, g, dg)))
-  #print(paste0("K=", current_r%*%current_r/2))
-  #print(epsilon)
   theta <- current_theta
   r <- current_r
   # Make a half step for momentum
@@ -128,36 +123,28 @@ leapfrog <- function(mod, current_theta, current_r, epsilon, g, dg){
   theta <- theta + epsilon * r
   # Make a half step for momentum
   r <- r + epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
-  #print(paste0("H=",hamiltonian(current_theta, current_r, mod, g, dg)))
-  #print(paste0("K=", current_r%*%current_r/2))
   return(list(theta = theta, r = r))
 }
 
+# function from the NUTS paper
+# the NUTS paper fix the initial epsilon value to 1,
+# in practice this can lead to very big leaps
+# here it is given by user
+# and generate NaN
 find_epsilon1 <- function(mod, theta, g, dg, init_eps){
-  #browser()
   epsilon <- init_eps
   r <- rnorm(length(theta),0,1)
   theta_r_prop <- leapfrog(mod, theta, r, epsilon, g, dg)
   if(exp(hamiltonian(theta, r, mod, g, dg)-
          hamiltonian(theta_r_prop$theta,
                      theta_r_prop$r, mod, g, dg)) > 0.5) a <- 1 else a <- -1
-  print(paste0("a= ", a))
   while(exp(a*(hamiltonian(theta,
                            r, mod, g, dg) -hamiltonian(theta_r_prop$theta,
                              theta_r_prop$r, mod, g, dg))) > 2^-a)
   {
-    print(paste0(epsilon/init_eps, "-> alpha: ",
-                 exp(a*(hamiltonian(theta, r, mod, g, dg) -
-                          hamiltonian(theta_r_prop$theta,
-                                      theta_r_prop$r, mod, g, dg)))))
     epsilon <- 2^a*epsilon
     theta_r_prop <- leapfrog(mod, theta, r, epsilon, g, dg)
   }
-  print(paste0(epsilon/init_eps, "-> alpha: ",
-               exp(a*(hamiltonian(theta, r, mod, g, dg) -
-                        hamiltonian(theta_r_prop$theta,
-                                    theta_r_prop$r, mod, g, dg)))))
-  print(paste0("eps= ",epsilon, " --- (theta,r) = [", theta_r_prop$theta, ", ", theta_r_prop$r, "]"))
   epsilon
 }
 
@@ -188,7 +175,7 @@ for(i in 1:10000)
 
 ## HMC
 
-```{r}
+```{r HMC}
 #Test HMC is working with leapfrog integrator
 g <- function(theta) {as.list(exp(theta))}
 dg <- function(theta) {exp(theta)}
@@ -234,21 +221,13 @@ for(k in 1:2000){
 - Near the mode, random momentum generation allows to explore the distribution
 :::
 
-## Leapfrog descent
-
-```{r}
-
-```
-
 ## Recursive tree building
 
-```{r}
+```{r recursive-tree-function}
+#| echo: TRUE
 build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, delta = 1000)
 {
-  #browser()
-  #print(j)
   if(j==0) {
-    #browser()
     # base case, one leapfrog in direction v
     theta_r_prop <- leapfrog(mod, theta, r, v*epsilon, g, dg)
     H_prop <- hamiltonian(theta_r_prop$theta, theta_r_prop$r, mod, g, dg)
@@ -269,7 +248,6 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
     )
   } else { #j>0
     result_list <- build_tree(theta, r, u, v, j-1, epsilon, theta_0, r_0, mod, g, dg, delta)
-    #browser()
     if(result_list$s_prop){ # continue the tree unless stop condition is reached
       if(v==-1){
         alternative_list <- build_tree(result_list$theta_minus, result_list$r_minus,
@@ -298,77 +276,80 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
 }
 ```
 
-## NUTS algorithm
+## NUTS step
 
-```{r}
-
-theta0 <- log(unlist(pars))
-M <- 50000
-M_adapt <- 100
-D_max <- 1000
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)/3
-#epsilon0 <- 0.005
-mu <- log(10*epsilon0)/10
-theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
-colnames(theta_m) <- names(theta0)
-
-tt <- rbind(theta0 ,theta0 ,theta0 )
-
-for(i in 1:M)
-{
+```{r NUTS_step_function}
+#| echo: TRUE
+NUTS_step <- function(theta, epsilon0, mod, g, dg, D_max){
+  theta_prop <- theta
   r0 <- rnorm(length(theta),0,1)
-  #print(r0)
-  u <- runif(1)*exp(-hamiltonian(theta_m[i,], r0, mod, g, dg))
-  theta_minus <- theta_m[i,]
-  theta_plus <- theta_m[i,]
-  r_minus <- r0
-  r_plus <- r0
+  u <- runif(1)*exp(-hamiltonian(theta, r0, mod, g, dg))
+  tree_list <- list(theta_minus = theta,
+                    r_minus = r0,
+                    theta_plus = theta,
+                    r_plus = r0
+  )
   j <- 0
-  theta_prop <- theta_m[i,]
-  theta_m[i+1,] <- theta_m[i,]
   n <- 1
   s <- TRUE
   while(s){
     v <- sample(c(-1,1),1)
     if(v==-1){
-      tree_list <- build_tree(theta_minus, r_minus,
-                                     u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+      tree_list <- build_tree(tree_list$theta_minus, tree_list$r_minus,
+                              u, v, j, epsilon0, theta, r0, mod, g, dg, D_max)
     } else {
-      tree_list <- build_tree(theta_plus, r_plus,
-                              u, v, j, epsilon0, theta_m[i,], r0, mod, g, dg, D_max)
+      tree_list <- build_tree(tree_list$theta_plus, tree_list$r_plus,
+                              u, v, j, epsilon0, theta, r0, mod, g, dg, D_max)
     }
-    #browser()
     if(tree_list$s_prop)
       if(runif(1)<min(1,tree_list$n_prop/n))
-        theta_m[i+1,] <- tree_list$theta_prop
+        theta_prop <- tree_list$theta_prop
     n <- n + tree_list$n_prop
     s <- tree_list$s_prop &
       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_minus >= 0) &
       ((tree_list$theta_plus-tree_list$theta_minus)%*%tree_list$r_plus >= 0)
     j <- j+1
   }
+  list(theta_prop=theta_prop, j=j, s=s, n=n, theta_minus=tree_list$theta_minus, theta_plus=tree_list$theta_plus)
+}
+```
+
+## NUTS algorithm
+
+```{r run-NUTS-chain}
+#| echo: TRUE
+theta0 <- log(unlist(pars))
+M <- 5000
+M_adapt <- 100
+D_max <- 1000
+epsilon0 <- find_epsilon1(mod, theta0, g, dg, 0.0001)
+mu <- log(10*epsilon0)/10
+theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
+colnames(theta_m) <- names(theta0)
+
+for(i in 1:M)
+{
+  res <- NUTS_step(theta_m[i,], 0.01, mod, g, dg, D_max)
+  theta_m[i+1,] <- res$theta_prop
 }
 
 ```
 
 ## NUTS algorithm
 
-```{r}
+```{r plot-NUTS-samples}
 plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
      xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-2,2),
      ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-2,2),
      col="red")
 points(current_theta[1], current_theta[2], pch=19, col="blue")
 
-points(theta_m[,1], theta_m[,2], col="orange", pch=19)
+points(theta_m[-(1:50),1], theta_m[-(1:50),2], col="orange", pch=19)
 
 ```
 
 ## NUTS algorithm
 
-```{r}
+```{r plot-NUTS-chain}
 plot(theta_m[-(1:50),1])
 ```
-
-
-
