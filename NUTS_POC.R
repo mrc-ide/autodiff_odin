@@ -12,42 +12,13 @@ incidence <- data.frame(
   time = incidence$day * 4,
   cases_observed = incidence$cases)
 
-# Create set of parameters
+# Create a set of parameters
 pars <- list(beta = 0.25, gamma = 0.1, I0 = 1)
 
 # Set up the data for the particle filter
 d_df <- incidence
 d_df$t <- 1:100 #rename to respect convention that time should not be called time ;)
 pf_data <- mcstate::particle_filter_data(d_df, "t", rate=4, initial_time = 0)
-
-# Creating the filter
-filter <- mcstate::particle_deterministic$new(data=pf_data, gen, compare = NULL)
-
-# Running the filter for likelihood estimation
-filter$run(pars = pars)
-
-# Run mcmc
-beta <- mcstate::pmcmc_parameter("beta", 0.2, min = 0)
-gamma <- mcstate::pmcmc_parameter("gamma", 0.1, min = 0, prior = function(p)
-  dgamma(p, shape = 1, scale = 0.2, log = TRUE))
-I0 <- mcstate::pmcmc_parameter("I0", 1, min = 0)
-
-proposal_matrix <- diag(0.1, 3)
-proposal_matrix <- matrix(c(0.0002123093,0.0001906685,-0.0270819864,0.0001906685,0.0001908083,-0.0211008465,-0.0270819864,-0.0211008465,5.30085662), ncol=3)
-mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma, I0 = I0),
-                                           proposal_matrix)
-n_steps <- 5000
-control <- mcstate::pmcmc_control(
-  n_steps,
-  save_state = TRUE,
-  save_trajectories = TRUE,
-  progress = TRUE)
-pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
-plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
-     xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-2,2),
-     ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-2,2),
-     col="red")
-#hist(pmcmc_run$probabilities[-(1:50),2])
 
 # Set up the data to attach to dust model
 d <- dust::dust_data(incidence)
@@ -58,11 +29,6 @@ mod$set_data(d)
 
 # Running the likelihood evaluation using the odin model, compare and data
 mod$run_adjoint()
-
-# Simulating the model and calculating the likelihood based on this
-mod$update_state(time = 0)
-y <- mod$simulate(c(1:100)*4)
-sum(dpois(x = incidence$cases_observed, lambda = y[mod$info()$index$cases_inc,1,], log = TRUE))
 
 compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
   pars <- trans(theta)
@@ -164,22 +130,7 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
   }
 }
 
-plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
-     xlim=range(log(pmcmc_run$pars[-(1:50),1]))+c(-2,2),
-     ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-2,2),
-     col="red")
-points(current_theta[1], current_theta[2], pch=19, col="blue")
-
-theta0 <- log(unlist(pars))
-M <- 5000
-M_adapt <- 100
-D_max <- 1000
-epsilon0 <- find_epsilon1(mod, theta, g, dg, 0.0001)
-mu <- log(10*epsilon0)/10
-theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
-colnames(theta_m) <- names(theta0)
-
-NUTS_step <- function(theta, epsilon0, mod, g, dg, D_max){
+NUTS_step <- function(theta, epsilon, mod, g, dg, D_max){
   theta_prop <- theta
   r0 <- rnorm(length(theta),0,1)
   u <- runif(1)*exp(-hamiltonian(theta, r0, mod, g, dg))
@@ -195,10 +146,10 @@ NUTS_step <- function(theta, epsilon0, mod, g, dg, D_max){
     v <- sample(c(-1,1),1)
     if(v==-1){
       tree_list <- build_tree(tree_list$theta_minus, tree_list$r_minus,
-                              u, v, j, epsilon0, theta, r0, mod, g, dg, D_max)
+                              u, v, j, epsilon, theta, r0, mod, g, dg, D_max)
     } else {
       tree_list <- build_tree(tree_list$theta_plus, tree_list$r_plus,
-                              u, v, j, epsilon0, theta, r0, mod, g, dg, D_max)
+                              u, v, j, epsilon, theta, r0, mod, g, dg, D_max)
     }
     if(tree_list$s_prop)
       if(runif(1)<min(1,tree_list$n_prop/n))
@@ -212,9 +163,21 @@ NUTS_step <- function(theta, epsilon0, mod, g, dg, D_max){
   list(theta_prop=theta_prop, j=j, s=s, n=n, theta_minus=tree_list$theta_minus, theta_plus=tree_list$theta_plus)
 }
 
+g <- function(theta) {as.list(exp(theta))}
+dg <- function(theta) {exp(theta)}
+theta0 <- log(unlist(pars))
+M <- 5000
+M_adapt <- 100
+D_max <- 1000
+epsilon0 <- find_epsilon1(mod, theta0, g, dg, 0.0001)
+mu <- log(10*epsilon0)/10
+theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
+colnames(theta_m) <- names(theta0)
+
 for(i in 1:M)
 {
   res <- NUTS_step(theta_m[i,], 0.01, mod, g, dg, D_max)
   theta_m[i+1,] <- res$theta_prop
 }
 
+plot(theta_m[-(1:50),1], theta_m[-(1:50),2],pch=19, col="#3322ff44")

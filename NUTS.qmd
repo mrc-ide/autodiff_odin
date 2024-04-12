@@ -280,7 +280,7 @@ build_tree <- function(theta, r, u, v, j, epsilon, theta_0, r_0, mod, g, dg, del
 
 ```{r NUTS_step_function}
 #| echo: TRUE
-NUTS_step <- function(theta, epsilon0, mod, g, dg, D_max){
+NUTS_step <- function(theta, epsilon, mod, g, dg, D_max){
   theta_prop <- theta
   r0 <- rnorm(length(theta),0,1)
   u <- runif(1)*exp(-hamiltonian(theta, r0, mod, g, dg))
@@ -296,10 +296,10 @@ NUTS_step <- function(theta, epsilon0, mod, g, dg, D_max){
     v <- sample(c(-1,1),1)
     if(v==-1){
       tree_list <- build_tree(tree_list$theta_minus, tree_list$r_minus,
-                              u, v, j, epsilon0, theta, r0, mod, g, dg, D_max)
+                              u, v, j, epsilon, theta, r0, mod, g, dg, D_max)
     } else {
       tree_list <- build_tree(tree_list$theta_plus, tree_list$r_plus,
-                              u, v, j, epsilon0, theta, r0, mod, g, dg, D_max)
+                              u, v, j, epsilon, theta, r0, mod, g, dg, D_max)
     }
     if(tree_list$s_prop)
       if(runif(1)<min(1,tree_list$n_prop/n))
@@ -329,7 +329,7 @@ colnames(theta_m) <- names(theta0)
 
 for(i in 1:M)
 {
-  res <- NUTS_step(theta_m[i,], 0.01, mod, g, dg, D_max)
+  res <- NUTS_step(theta_m[i,], epsilon0, mod, g, dg, D_max)
   theta_m[i+1,] <- res$theta_prop
 }
 
