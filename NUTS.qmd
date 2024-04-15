@@ -8,7 +8,7 @@ format:
 bibliography: papers_autodiff.bib
 ---
 
-# Setting up model
+# Setting up model & random walk inference
 
 ## Set up
 
@@ -72,6 +72,8 @@ plot(log(pmcmc_run$pars[-(1:50),1]),log(pmcmc_run$pars[-(1:50),2]),
      ylim=range(log(pmcmc_run$pars[-(1:50),2]))+c(-2,2),
      col="red")
 ```
+
+# Gradient based method
 
 ## Run gradient
 ```{r run-gradient}
@@ -221,6 +223,8 @@ for(k in 1:2000){
 - Near the mode, random momentum generation allows to explore the distribution
 :::
 
+# NUTS
+
 ## Recursive tree building
 
 ```{r recursive-tree-function}
@@ -322,7 +326,7 @@ theta0 <- log(unlist(pars))
 M <- 5000
 M_adapt <- 100
 D_max <- 1000
-epsilon0 <- find_epsilon1(mod, theta0, g, dg, 0.0001)
+epsilon0 <- find_epsilon1(mod, theta0, g, dg, 0.0001)/2
 mu <- log(10*epsilon0)/10
 theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
 colnames(theta_m) <- names(theta0)
