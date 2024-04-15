@@ -169,15 +169,27 @@ theta0 <- log(unlist(pars))
 M <- 5000
 M_adapt <- 100
 D_max <- 1000
-epsilon0 <- find_epsilon1(mod, theta0, g, dg, 0.0001)
+#epsilon0 <- find_epsilon1(mod, theta0, g, dg, 0.0001)
+epsilon0 <- 0.018
 mu <- log(10*epsilon0)/10
 theta_m <- matrix(rep(theta0, M+1), ncol = length(theta0), byrow = TRUE)
 colnames(theta_m) <- names(theta0)
 
 for(i in 1:M)
 {
-  res <- NUTS_step(theta_m[i,], 0.01, mod, g, dg, D_max)
+  res <- NUTS_step(theta_m[i,], epsilon0 , mod, g, dg, D_max)
   theta_m[i+1,] <- res$theta_prop
 }
 
 plot(theta_m[-(1:50),1], theta_m[-(1:50),2],pch=19, col="#3322ff44")
+
+epsilon_test <- seq(0.001, 0.03, length.out=10000)
+
+res_epsilon <- sapply(X = epsilon_test, FUN = function(x){
+  r <- rnorm(length(theta0),0,1)
+  theta_r_prop <- leapfrog(mod, theta0, r, x, g, dg)
+  exp(compute_gradient(mod, theta_r_prop$theta, g, dg)$log_likelihood -
+        compute_gradient(mod, theta0, g, dg)$log_likelihood)
+    })
+
+plot(epsilon_test, res_epsilon, ylim=c(0,1))
