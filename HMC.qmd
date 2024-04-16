@@ -14,23 +14,37 @@ bibliography: papers_autodiff.bib
 
 - for more details see e.g. @neal_mcmc_2011 or @betancourt_conceptual_2018
 - an algorithm akin to RWMH-MCMC which exploits Hamiltonian dynamics to move more efficiently in the parameter space
-- requires the gradient of the log-density (the score)
-- In its simplest form, uses two parameters, $\epsilon$ and $L$
+- requires the gradient of the log-posterior density (the score)
+- In its simplest form, uses two parameters, $\epsilon$ (small) and $L$ (integer)
 
 ## Hamiltonian dynamics - ideas
 
-- We augment our position $\theta$ in the parameter space with a "momentum" $r$
+- We augment $\theta$ (position in the parameter space) with a "momentum" $r$
 
 - While the dimension of the space to explore is doubled, this actually helps 
 
-- We can now describe the system in term of its "Hamiltonian" the sum of its kinetic (only depends of momentum) and potential (only depends on position) energies
+- We can now describe the system in term of its energy called "Hamiltonian", decomposed into kinetic (only depends on momentum) and potential (only depends on position)
 $$
 H(\theta, r) = T(r) + U(\theta)
 $$
 
+## Kinetic and potential energies
+
+Assuming a mass matrix to be identity, we get the following expressions:
+
+- Kinetic energy
+$$
+T(r) = \frac{r^\intercal r}{2}
+$$
+
+- Potential energy
+$$
+U(\theta) = - \log [ \pi(\theta) L(\theta|D)]
+$$
+
 ## Hamiltonian dynamics - equations
 
-We can move at constant energy levels using the Hamiltonian Dynamics Equations:
+We can move at constant energy levels using the Hamiltonian dynamics equations:
 \begin{cases}
 \begin{align*}
 \frac{d\theta}{dt} &= \frac{\partial H}{\partial r} \\
@@ -38,11 +52,11 @@ We can move at constant energy levels using the Hamiltonian Dynamics Equations:
 \end{align*}
 \end{cases}
 
-with $H$ is the Hamiltonian
+with $H$ the Hamiltonian of the system
 
 ## Leapfrog integration
 
-- We can move at (almost) constant energy level using the Störmer-Verlet ("leapfrog") integrator
+- We can thus move at almost constant energy level using the Störmer-Verlet ("leapfrog") integrator
 \begin{cases}
 \begin{align}
 r_{t+\frac{1}{2}} &= r_t - \frac{1}{2} \nabla U(\theta_t) \cdot \epsilon \\
@@ -55,22 +69,25 @@ p_{t+1} &= p_{t+\frac{1}{2}} - \frac{1}{2} \nabla U(q_{t+1}) \cdot \epsilon
 
 ## Algorithm
 
-- Step 1: run $L$ leapfrog step
-- Step 2: accept or reject with probability
+- Step 1: draw $r$ from a multivariate normal
+- Step 2: run $L$ leapfrog step from $(\theta, r)$ to reach $(\theta^*,r^*)$
+- Step 3: accept or reject with probability
 $$\min[1, e^{H(\theta,r) - H(\theta^*,r^*)}]$$
-- Step 3: run 1 & 2 until a certain number of steps is reached
+- Step 4: run 1 & 2 until a certain number of steps is reached
+
+N.B. As the Leapfrog integration keep the Hamiltonian almost constant the acceptance rate is high even for relatively big steps $\epsilon$
 
 ## AutoDiff
 
-- Key quantity in the algorithm is the gradient of the log-density
-- AutoDiff provides fast methods for getting gradient of log-density of odin model
+- Key quantity in the algorithm is the gradient of the log-posterior density $\nabla U(\theta)= \nabla \{ - \log [ \pi(\theta) L(\theta|D)] \}$
+- AutoDiff provides fast methods for getting gradient of log-likelihood of odin model
 
 ## Inference space vs odin model space
 
-In stan inference is done on an unconstrained space
-https://mc-stan.org/docs/reference-manual/variable-transforms.html
-
-It's a similar problem than the problem of the propagtion of the gradient from the odin model through the transform function
+- odin model parameters can live on constrained space
+- HMC needs differential space and is easier if space is unconstrained
+- e.g. in [stan](https://mc-stan.org/docs/reference-manual/variable-transforms.html) inference is done on an unconstrained space 
+- similar problem than the problem of the propagation of the gradient from the odin model through the transform function
 
 # Worked example: SIR model
 
@@ -149,6 +166,18 @@ mod <- gen$new(pars, 0, 1, deterministic = TRUE)
 mod$set_data(d)
 ```
 
+## Unconstrained parameter space
+
+- We use log to map the parameters and the gradient from $\mathbb{R}_{+}^{d}$  to the $\mathbb{R}^{d}$ "inference" space
+
+- We use reversely exponential to move back gradient and parameters in the "modelling" space
+
+```{r transform-functions}
+#| echo: TRUE
+g <- function(theta) {as.list(exp(theta))}
+dg <- function(theta) {exp(theta)}
+```
+
 ## Gradient function
 
 A wrapper to transform the parameters, run adjoints and scale gradient back
@@ -161,13 +190,6 @@ compute_gradient <- function(mod, theta, trans, pd_trans, t = 0){
   list(log_likelihood = -res_adj$log_likelihood,
        gradient = -pd_trans(theta)*res_adj$gradient)
 }
-```
-
-We use exponential to map from $\mathbb{R}^{d}$ to $\mathbb{R}_{+}^{d}$ and the gradient back to the "inference" space 
-```{r transform-functions}
-#| echo: TRUE
-g <- function(theta) {as.list(exp(theta))}
-dg <- function(theta) {exp(theta)}
 ```
 
 ## HMC step
@@ -209,6 +231,13 @@ HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
 
 ## Run the HMC
 
+- Log transform the epidemiological parameters
+```{r}
+#| echo: TRUE
+theta <- log(unlist(pars))
+```
+
+- Run the HMC chain
 ```{r}
 #| echo: TRUE
 theta <- log(unlist(pars))
@@ -224,14 +253,14 @@ for(i in seq(n_steps)){
 
 ```{r}
 #| echo: TRUE
-plot(theta_chain[,"gamma"], type="l")
+plot(exp(theta_chain[,"gamma"]), type="l")
 ```
 
 ## Further work
 
-- NUTS @hoffman_no-u-turn_2014
-- Mass
-- Riemannian HMC @Girolami2011
+- $\epsilon$ and $L$ can be defined adaptively using NUTS @hoffman_no-u-turn_2014
+- the Kinetic energy can be tuned in order to optimise the exploration of the parameter space @livingstone_kinetic_2019
+- the geometry of the distribution space can be exploited using Riemannian manifolds @Girolami2011
 
 ## References
 

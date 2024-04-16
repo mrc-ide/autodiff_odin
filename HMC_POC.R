@@ -74,7 +74,7 @@ HMC_step <- function(mod, current_theta, epsilon, L, g, dg){
 }
 
 theta <- log(unlist(pars))
-n_steps <- 10000
+n_steps <- 10
 theta_chain <- NULL
 for(i in seq(n_steps)){
   theta <- HMC_step(mod, theta, 0.015, 10, g, dg)
@@ -90,4 +90,54 @@ compute_gradient(mod, theta, g, dg)
 h <- 1e-7
 (compute_gradient(mod, theta+c(0,0,h), g, dg)$log_likelihood - compute_gradient(mod, theta, g, dg)$log_likelihood)/h
 compute_gradient(mod, theta, g, dg)$gradient
+
+#implement algorithm 4 from the NUTS paper
+leapfrog <- function(mod, current_theta, current_v, epsilon, g, dg){
+  #browser()
+  #current_v <- rnorm(length(theta),0,1) # independent standard normal variates
+  theta <- current_theta
+  v <- current_v
+
+  # Make a half step for momentum at the beginning
+  v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
+  theta <- theta + epsilon * v
+  v <- v - epsilon * compute_gradient(mod, theta, g, dg)$gradient / 2
+  # Negate momentum at end of trajectory to make the proposal symmetric
+  v <- -v
+  # Evaluate potential and kinetic energies at start and end of trajectory
+  # current_U <- compute_gradient(mod, current_theta, g, dg)$log_likelihood
+  # current_K <- sum(current_v^2) / 2
+  # proposed_U <- compute_gradient(mod, theta, g, dg)$log_likelihood
+  # proposed_K <- sum(v^2) / 2
+  return(list(theta = theta, r = v))
+}
+
+hamiltonian <- function(theta, r, mod, g, dg){
+  #Note that we only need the likelihood here so no need to also calculate
+  #the gradient as we do here
+  sum(r^2) / 2  - compute_gradient(mod, theta, g, dg)$log_likelihood
+}
+
+find_epsilon1 <- function(mod, theta, g, dg, init_eps){
+  #browser()
+  #the NUTS paper fix the initial value to 1, in practice this can lead to very big leaps
+  #and generate NaN
+  epsilon <- init_eps
+  current_theta <- theta
+  current_r <- rnorm(length(theta),0,1)
+  theta_r_prop <- leapfrog(mod, theta, current_r, epsilon, g, dg)
+  if(exp(hamiltonian(theta_r_prop$theta,
+                     theta_r_prop$r, mod, g, dg) -hamiltonian(current_theta,
+                                                 current_r, mod, g, dg)) > 0.5) a <- 1 else a <- -1
+  while(exp(a*(hamiltonian(theta_r_prop$theta,
+                        theta_r_prop$r, mod, g, dg) -hamiltonian(current_theta,
+                                                                 current_r, mod, g, dg))) > 2^-a)
+    {
+      epsilon <- 2^a*epsilon
+      theta_r_prop <- leapfrog(mod, theta, current_r, epsilon, g, dg)
+      }
+  epsilon
+}
+
+find_epsilon1(mod, theta, g, dg, 0.0000001)
 
