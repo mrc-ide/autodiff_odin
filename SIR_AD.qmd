@@ -5,7 +5,6 @@ format:
   revealjs:
     theme: black
     logo: "images/Imperial_clear_logo.png"
-    footer: "[AutoDiff with odin](https://www.imperial.ac.uk/people/m.baguelin)"
     slide-number: c/t
     footer: "[AutoDiff with odin (difference equations)](https://www.imperial.ac.uk/people/m.baguelin)"
 ---
