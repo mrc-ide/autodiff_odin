@@ -39,7 +39,7 @@ sir <- odin2::odin({
   # User defined parameters - default in parentheses:
   S0 <- parameter()
   I0 <- parameter()
-  beta <- parameter(0.00165)
+  beta <- parameter(0.000165)
   gamma <- parameter(0.1)
 
   # Dimensions of arrays
@@ -65,3 +65,5 @@ dust2::dust_system_set_state_initial(sys)
 dust2::dust_system_state(sys)
 t <- seq(0, 150, by = 0.25)
 y <- dust2::dust_system_simulate(sys, t)
+
+plot(y[7,], type='l')
