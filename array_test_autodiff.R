@@ -1,3 +1,4 @@
+# odin model
 sir <- odin2::odin({
 
   # Equations for transitions between compartments by age group
@@ -28,8 +29,8 @@ sir <- odin2::odin({
   # Draws from binomial distributions for numbers changing between
   # compartments:
 
-  n_SI[] <- Binomial(S[i], p_SI[i])
-  n_IR[] <- Binomial(I[i], p_IR)
+  n_SI[] <- S[i] * p_SI[i]
+  n_IR[] <- I[i] * p_IR
 
   initial(S[]) <- S0[i]
   initial(I[]) <- I0[i]
@@ -41,6 +42,7 @@ sir <- odin2::odin({
   I0 <- parameter()
   beta <- parameter(0.000165)
   gamma <- parameter(0.1)
+  rho <- parameter(0.1)
 
   # Dimensions of arrays
   dim(S0) <- 2
@@ -54,16 +56,26 @@ sir <- odin2::odin({
   dim(m) <- c(2, 2)
   dim(s_ij) <- c(2, 2)
   dim(lambda) <- 2
+
+  cases <- data()
+  cases ~ Poisson(rho * incidence)
 })
 
-sys <- dust2::dust_system_create(sir, list(
+# Generating data
+pars <- list(
   S0 = c(1000,1000),
   I0 = c(10,0),
-  m = matrix(c(1,0.5,1,0.5), ncol = 2)
-), dt = 0.25)
+  m = matrix(c(1,0.5,1,0.5), ncol = 2))
+sys <- dust2::dust_system_create(sir, pars, dt = 0.25)
 dust2::dust_system_set_state_initial(sys)
 dust2::dust_system_state(sys)
-t <- seq(0, 150, by = 0.25)
+t <- seq(1, 100)
 y <- dust2::dust_system_simulate(sys, t)
+set.seed(42)
+cases <- rpois(length(t), y[7,seq_along(t)] * 0.1)
+data <- data.frame(time = t, cases = cases)
 
-plot(y[7,], type='l')
+# Filter and likelihood
+filter <- dust2::dust_unfilter_create(sir, 0, data)
+
+dust2::dust_likelihood_run(filter, pars)
